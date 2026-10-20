@@ -1,0 +1,368 @@
+@if (config(); as config) {
+  <app-page-heading
+    [title]="config.title"
+    eyebrow="GESTIÓN / EMPRESA"
+    [description]="config.description"
+  >
+    @if (session.canWrite() && allowed()) {
+      <button class="button primary" (click)="create()" [disabled]="busy() || editing()">
+        ＋ Registrar {{ config.singular }}
+      </button>
+    }
+  </app-page-heading>
+  @if (!allowed()) {
+    <div class="panel empty">
+      <h2>Acceso no disponible</h2>
+      <p class="muted">Selecciona una empresa en la que tengas permisos para este módulo.</p>
+    </div>
+  } @else {
+    <div class="stack">
+      @if (error() && !editing() && !action()) {
+        <div class="error" role="alert">{{ error() }}</div>
+      }
+      @if (message()) {
+        <div class="success" role="status">{{ message() }}</div>
+      }
+      @if (editing()) {
+        <app-form-modal
+          [title]="(selected() ? 'Editar ' : 'Registrar ') + config.singular"
+          [busy]="busy()"
+          (closeRequested)="cancel()"
+        >
+          @if (error()) {
+            <div class="error" role="alert">{{ error() }}</div>
+          }
+          <p class="muted">
+            Los campos con * son obligatorios. Las referencias deben pertenecer a la empresa activa.
+          </p>
+          <form class="stack" [formGroup]="form()" (ngSubmit)="save()">
+            @if (wizard()) {
+              <ol class="wizard-steps" aria-label="Pasos del viaje">
+                <li [attr.aria-current]="step() === 0 ? 'step' : null">1. Carga y trayecto</li>
+                <li [attr.aria-current]="step() === 1 ? 'step' : null">2. Ejecución</li>
+                <li [attr.aria-current]="step() === 2 ? 'step' : null">3. Revisar</li>
+              </ol>
+            }
+            @if (wizard() && step() === 2) {
+              <section class="panel">
+                <h3>Revisa el viaje antes de registrarlo</h3>
+                <dl class="form-grid">
+                  @for (field of fields(); track field.key) {
+                    <div>
+                      <dt class="muted">{{ relationLabel(field) }}</dt>
+                      <dd>{{ label(form().get(field.key)?.value) }}</dd>
+                    </div>
+                  }
+                </dl>
+                <p class="help">
+                  El viaje se registrará en la empresa activa. Las fechas de ejecución las establece
+                  el servidor al iniciar y completar el viaje.
+                </p>
+              </section>
+            }
+            <div class="form-grid">
+              @for (field of displayedFields(); track field.key) {
+                @if (relations[field.key]; as relation) {
+                  <app-entity-select
+                    [config]="relation"
+                    [control]="form().controls[field.key]"
+                    [label]="relationLabel(field)"
+                    [fieldId]="'relation-' + field.key"
+                  />
+                } @else {
+                  <div class="field">
+                    <label [for]="'field-' + field.key"
+                      >{{ field.label }}{{ field.required ? ' *' : '' }}</label
+                    >
+                    @if (field.options) {
+                      <select
+                        [id]="'field-' + field.key"
+                        [formControlName]="field.key"
+                        (change)="field.key === 'executionType' ? modeChange() : null"
+                      >
+                        <option [ngValue]="null">Selecciona una opción</option>
+                        @for (option of field.options; track option) {
+                          <option [value]="option">{{ label(option) }}</option>
+                        }
+                      </select>
+                    } @else {
+                      <input
+                        [id]="'field-' + field.key"
+                        [type]="field.type || 'text'"
+                        [formControlName]="field.key"
+                        [attr.maxlength]="field.max ?? null"
+                        [attr.min]="field.min ?? null"
+                        [attr.step]="field.step ?? null"
+                        [attr.aria-invalid]="
+                          form().get(field.key)?.touched && form().get(field.key)?.invalid
+                        "
+                      />
+                    }
+                    @if (form().get(field.key)?.touched && form().get(field.key)?.invalid) {
+                      <small
+                        >Completa este campo con un valor válido{{
+                          field.max ? ' (máximo ' + field.max + ' caracteres)' : ''
+                        }}.</small
+                      >
+                    }
+                  </div>
+                }
+              }
+            </div>
+            <div class="actions">
+              @if (wizard() && step() > 0) {
+                <button
+                  type="button"
+                  class="button"
+                  (click)="step.set(step() - 1)"
+                  [disabled]="busy()"
+                >
+                  Paso anterior
+                </button>
+              }
+              @if (wizard() && step() < 2) {
+                <button type="button" class="button primary" (click)="nextStep()">Continuar</button>
+              } @else {
+                <button class="button primary" type="submit" [disabled]="busy()">
+                  {{ busy() ? 'Guardando…' : 'Guardar' }}
+                </button>
+              }
+              <button class="button" type="button" (click)="cancel()" [disabled]="busy()">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </app-form-modal>
+      }
+      @if (selected(); as record) {
+        <section class="panel stack">
+          <div class="actions">
+            <h2>Detalle de {{ config.singular }} #{{ record[config.id] }}</h2>
+            <button class="button" (click)="selected.set(null)">Cerrar detalle</button>
+          </div>
+          <dl class="form-grid">
+            @for (field of config.fields; track field.key) {
+              <div>
+                <dt class="muted">{{ field.label }}</dt>
+                <dd>
+                  @if (relations[field.key]; as relation) {
+                    <app-entity-label [config]="relation" [id]="record[field.key]" />
+                  } @else {
+                    {{ label(record[field.key]) }}
+                  }
+                </dd>
+              </div>
+            }
+          </dl>
+          @if (config.state) {
+            <app-status-badge [value]="record[config.state]" />
+          }
+          @if (session.canWrite()) {
+            <div class="actions">
+              @if (!config.noEdit) {
+                <button class="button primary" (click)="edit()" [disabled]="busy()">
+                  Editar datos
+                </button>
+              }
+              @if (module() === 'asignaciones') {
+                <button class="button" (click)="openAction('end')" [disabled]="busy()">
+                  Finalizar asignación
+                </button>
+                @if (action() === 'end') {
+                  <app-form-modal
+                    title="Finalizar asignación"
+                    [busy]="busy()"
+                    (closeRequested)="closeAction()"
+                  >
+                    @if (error()) {
+                      <div class="error" role="alert">{{ error() }}</div>
+                    }
+                    <label
+                      >Fecha de finalización<input
+                        #until
+                        type="datetime-local"
+                        (input)="actionDirty.set(true)"
+                      /><button
+                        class="button"
+                        (click)="endAssignment(until.value)"
+                        [disabled]="busy()"
+                      >
+                        Finalizar asignación
+                      </button></label
+                    >
+                  </app-form-modal>
+                }
+              }
+            </div>
+          }
+          @if (canChangeStatus() && availableStatuses().length) {
+            <div class="actions">
+              <button class="button" (click)="openAction('status')" [disabled]="busy()">
+                Cambiar estado
+              </button>
+              @if (action() === 'status') {
+                <app-form-modal
+                  title="Cambiar estado"
+                  [busy]="busy()"
+                  (closeRequested)="closeAction()"
+                >
+                  @if (error()) {
+                    <div class="error" role="alert">{{ error() }}</div>
+                  }
+                  <label
+                    >Cambiar estado<select #state (change)="actionDirty.set(true)">
+                      @for (value of availableStatuses(); track value) {
+                        <option [value]="value">{{ label(value) }}</option>
+                      }</select
+                    ><button class="button" (click)="changeStatus(state.value)" [disabled]="busy()">
+                      Aplicar estado
+                    </button></label
+                  >
+                </app-form-modal>
+              }
+            </div>
+          }
+        </section>
+      }
+      <section class="panel stack" [attr.aria-busy]="result.isLoading()">
+        <div class="actions">
+          <h2>Registros de la empresa</h2>
+          <button class="button" (click)="result.reload()" [disabled]="result.isLoading()">
+            ↻ Actualizar
+          </button>
+        </div>
+        <form class="stack" [formGroup]="filterForm" (ngSubmit)="applyFilters()">
+          <div class="form-grid">
+            @for (filter of filters(); track filter.key) {
+              <label class="field"
+                >{{ filter.label }}
+                @if (filter.options) {
+                  <select [formControlName]="filter.key">
+                    <option value="">Todos</option>
+                    @for (option of filter.options; track option) {
+                      <option [value]="option">{{ label(option) }}</option>
+                    }
+                  </select>
+                } @else {
+                  <input
+                    [type]="filter.key === 'name' ? 'search' : 'number'"
+                    [formControlName]="filter.key"
+                    [attr.min]="filter.key === 'name' ? null : 1"
+                    [attr.step]="filter.key === 'name' ? null : 1"
+                  />
+                }
+              </label>
+            }
+          </div>
+          <div class="actions">
+            <label
+              >Orden<select
+                [value]="descending() ? 'desc' : 'asc'"
+                (change)="descending.set($any($event.target).value === 'desc')"
+              >
+                <option value="desc">Más recientes</option>
+                <option value="asc">Más antiguos</option>
+              </select></label
+            ><button class="button" type="submit">Aplicar filtros</button
+            ><button class="button" type="button" (click)="filterForm.reset(); applyFilters()">
+              Limpiar filtros
+            </button>
+          </div>
+        </form>
+        @if (result.isLoading()) {
+          <p class="empty muted" role="status">Cargando {{ config.title.toLowerCase() }}…</p>
+        } @else if (result.error()) {
+          <div class="error" role="alert">
+            {{ errorText(result.error()) }}
+            <button class="button" (click)="result.reload()">Reintentar</button>
+          </div>
+        } @else if (!records().length) {
+          <div class="empty">
+            <span class="symbol" aria-hidden="true">◇</span>
+            <h2>No hay registros en esta página</h2>
+            <p class="muted">Los registros de esta empresa aparecerán aquí.</p>
+          </div>
+        } @else {
+          <div
+            class="table-wrap"
+            tabindex="0"
+            role="region"
+            [attr.aria-label]="'Tabla de ' + config.title"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">ID</th>
+                  @for (column of config.columns; track column.key) {
+                    <th scope="col">{{ column.label }}</th>
+                  }
+                  @if (config.state) {
+                    <th scope="col">Estado</th>
+                  }
+                  <th scope="col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of records(); track recordKey(row)) {
+                  <tr>
+                    <td>#{{ row[config.id] }}</td>
+                    @for (column of config.columns; track column.key) {
+                      <td>
+                        @if (relations[column.key]; as relation) {
+                          <app-entity-label [config]="relation" [id]="row[column.key]" />
+                        } @else {
+                          {{ label(row[column.key]) }}
+                        }
+                      </td>
+                    }
+                    @if (config.state) {
+                      <td><app-status-badge [value]="row[config.state]" /></td>
+                    }
+                    <td>
+                      <button
+                        class="button"
+                        (click)="detail(row)"
+                        [disabled]="busy() || editing()"
+                        [attr.aria-label]="
+                          'Ver detalle de ' + config.singular + ' ' + row[config.id]
+                        "
+                      >
+                        Ver detalle <span aria-hidden="true">→</span>
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        @if (result.hasValue()) {
+          <div class="pagination">
+            <span class="muted"
+              >{{ result.value().totalElements }} registros · Página {{ page() + 1 }} de
+              {{ result.value().totalPages || 1 }}</span
+            >
+            <div class="actions">
+              <button
+                class="button"
+                (click)="setPage(page() - 1)"
+                [disabled]="page() === 0 || result.isLoading()"
+              >
+                Anterior</button
+              ><button
+                class="button"
+                (click)="setPage(page() + 1)"
+                [disabled]="page() + 1 >= result.value().totalPages || result.isLoading()"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        }
+      </section>
+    </div>
+  }
+} @else {
+  <h1>Módulo no encontrado</h1>
+  <p>Utiliza el menú lateral para acceder a una sección disponible.</p>
+}

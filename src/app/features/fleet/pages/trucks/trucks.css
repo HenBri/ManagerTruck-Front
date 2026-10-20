@@ -1,0 +1,48 @@
+.section-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.section-top p {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+}
+.section-top h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  padding: 1rem 0;
+  margin: 0 0 1rem;
+}
+.detail-grid dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.detail-grid dd {
+  margin: 0.3rem 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.record-id {
+  display: block;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+@media (max-width: 600px) {
+  .detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .section-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

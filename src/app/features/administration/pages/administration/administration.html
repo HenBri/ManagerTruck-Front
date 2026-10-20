@@ -1,0 +1,217 @@
+<app-page-heading
+  title="Administración"
+  eyebrow="EMPRESA / ACCESOS"
+  description="Gestiona las membresías y los roles de tu equipo en la empresa activa."
+/>
+@if (!session.canWrite()) {
+  <div class="error" role="alert">No tienes permiso para administrar esta empresa.</div>
+} @else {
+  <div class="stack">
+    @if (error() && !adding() && !selected()) {
+      <div class="error" role="alert">{{ error() }}</div>
+    }
+    @if (message()) {
+      <div class="success" role="status">{{ message() }}</div>
+    }
+    @if (session.superAdmin()) {
+      <section class="panel stack">
+        <h2>Seleccionar empresa</h2>
+        <p class="muted">
+          Como administrador de plataforma puedes abrir una empresa sin membresía personal.
+        </p>
+        @if (companies.isLoading()) {
+          <p role="status">Cargando empresas…</p>
+        } @else if (companies.error()) {
+          <div class="error" role="alert">
+            {{ errorText(companies.error()) }}
+            <button class="button" (click)="companies.reload()">Reintentar empresas</button>
+          </div>
+        } @else if (companies.hasValue()) {
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Empresas">
+            <table>
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>NIT</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (company of companies.value().companies; track company.companyId) {
+                  <tr>
+                    <td>{{ company.name }} · #{{ company.companyId }}</td>
+                    <td>{{ company.nit || '—' }}</td>
+                    <td><app-status-badge [value]="company.status" /></td>
+                    <td>
+                      <button
+                        class="button"
+                        (click)="session.openAdminCompany(company)"
+                        [disabled]="company.status !== 'ACTIVE' || busy()"
+                      >
+                        Abrir empresa
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4">No hay empresas registradas en esta página.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span>Página {{ companyPage() + 1 }} de {{ companies.value().totalPages || 1 }}</span>
+            <div class="actions">
+              <button
+                class="button"
+                (click)="companyPage.set(companyPage() - 1)"
+                [disabled]="companyPage() === 0"
+              >
+                Anterior empresa</button
+              ><button
+                class="button"
+                (click)="companyPage.set(companyPage() + 1)"
+                [disabled]="companyPage() + 1 >= companies.value().totalPages"
+              >
+                Siguiente empresa
+              </button>
+            </div>
+          </div>
+        }
+      </section>
+    }
+    @if (session.companyId()) {
+      <div>
+        <button class="button primary" (click)="openAdd()" [disabled]="busy()">
+          Incorporar miembro
+        </button>
+      </div>
+      @if (adding()) {
+        <app-form-modal title="Incorporar miembro" [busy]="busy()" (closeRequested)="closeForm()">
+          @if (error()) {
+            <div class="error" role="alert">{{ error() }}</div>
+          }
+          <p class="muted">
+            La cuenta debe existir previamente. Incorporar una cuenta no le asigna roles
+            automáticamente.
+          </p>
+          <form class="form-grid" [formGroup]="form" (ngSubmit)="add()">
+            <label class="field"
+              >Correo de la cuenta<input type="email" formControlName="email" autocomplete="off" />
+              @if (form.controls.email.touched && form.controls.email.invalid) {
+                <small>Introduce un correo válido.</small>
+              }
+            </label>
+            <div class="actions">
+              <button class="button primary" type="submit" [disabled]="busy()">
+                Incorporar miembro
+              </button>
+            </div>
+          </form>
+        </app-form-modal>
+      }
+      @if (selected(); as member) {
+        <app-form-modal
+          [title]="'Asignar rol a ' + member.name + ' ' + member.lastname"
+          [busy]="busy()"
+          (closeRequested)="closeForm()"
+        >
+          @if (error()) {
+            <div class="error" role="alert">{{ error() }}</div>
+          }
+          <p class="muted">
+            Roles actuales: {{ member.roleNames.join(', ') || 'Ninguno' }}. Esta operación agrega un
+            rol; no revoca los existentes.
+          </p>
+          <label class="field"
+            >Rol empresarial<select #newRole (change)="roleDirty.set(true)">
+              <option value="PARTNER">Socio</option>
+              <option value="DRIVER">Conductor</option>
+              <option value="SECRETARY">Secretario</option>
+            </select></label
+          >
+          <div class="actions">
+            <button class="button primary" (click)="assign(newRole.value)" [disabled]="busy()">
+              Asignar rol</button
+            ><button class="button" (click)="closeForm()" [disabled]="busy()">Cerrar</button>
+          </div>
+        </app-form-modal>
+      }
+      <section class="panel stack">
+        <div class="actions">
+          <h2>Miembros de la empresa</h2>
+          <button class="button" (click)="members.reload()" [disabled]="members.isLoading()">
+            Actualizar miembros
+          </button>
+        </div>
+        @if (members.isLoading()) {
+          <p role="status">Cargando miembros…</p>
+        } @else if (members.error()) {
+          <div class="error" role="alert">{{ errorText(members.error()) }}</div>
+        } @else if (members.hasValue()) {
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Miembros">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Correo</th>
+                  <th>Roles</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (member of members.value().memberships; track member.userId) {
+                  <tr>
+                    <td>{{ member.name }} {{ member.lastname }}</td>
+                    <td>{{ member.email }}</td>
+                    <td>{{ member.roleNames.join(', ') || 'Sin roles' }}</td>
+                    <td><app-status-badge [value]="member.membershipStatus" /></td>
+                    <td>
+                      <div class="actions">
+                        <button
+                          class="button"
+                          (click)="openRoles(member)"
+                          [disabled]="busy() || member.membershipStatus !== 'ACTIVE'"
+                        >
+                          Roles</button
+                        ><button class="button" (click)="status(member)" [disabled]="busy()">
+                          {{ member.membershipStatus === 'ACTIVE' ? 'Desactivar' : 'Activar' }}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5">No hay miembros en esta página.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span
+              >{{ members.value().totalElements }} miembros · Página {{ page() + 1 }} de
+              {{ members.value().totalPages || 1 }}</span
+            >
+            <div class="actions">
+              <button class="button" (click)="page.set(page() - 1)" [disabled]="page() === 0">
+                Anterior</button
+              ><button
+                class="button"
+                (click)="page.set(page() + 1)"
+                [disabled]="page() + 1 >= members.value().totalPages"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        }
+      </section>
+    } @else {
+      <div class="panel empty"><h2>Selecciona una empresa para administrar sus miembros</h2></div>
+    }
+  </div>
+}

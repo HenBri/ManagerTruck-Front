@@ -1,0 +1,78 @@
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<div class="workspace" [class.compact]="compact() && !mobile()">
+  @if (!mobile()) {
+    <aside id="main-navigation" class="sidebar"><app-navigation [compact]="compact()" /></aside>
+  } @else if (open()) {
+    <div class="backdrop" (click)="closeDrawer()" aria-hidden="true"></div>
+    <aside
+      id="main-navigation"
+      class="sidebar drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menú principal"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+    >
+      <button class="drawer-close" type="button" (click)="closeDrawer()" aria-label="Cerrar menú">
+        ×
+      </button>
+      <app-navigation (navigated)="closeDrawer()" />
+    </aside>
+  }
+  <div class="workspace-body">
+    <header class="header">
+      <div class="header-start">
+        <button
+          #menuButton
+          type="button"
+          class="icon-button"
+          (click)="toggleMenu()"
+          [attr.aria-expanded]="mobile() ? open() : !compact()"
+          [attr.aria-controls]="!mobile() || open() ? 'main-navigation' : null"
+          aria-label="Alternar menú lateral"
+        >
+          ☰
+        </button>
+        <div class="workspace-label">
+          <span class="muted">Plataforma de transporte</span><strong>Mi espacio de trabajo</strong>
+        </div>
+      </div>
+      <div class="header-end">
+        @if (session.companies().length) {
+          <label class="company-picker"
+            ><span class="sr-only">Empresa activa</span
+            ><select [value]="session.companyId()" (change)="selectCompany($any($event.target))">
+              @for (company of session.companies(); track company.companyId) {
+                <option [value]="company.companyId">{{ company.name }}</option>
+              }
+            </select></label
+          >
+        }
+        <button type="button" class="user-trigger" [cdkMenuTriggerFor]="userMenu">
+          <span class="sr-only">Abrir menú de usuario</span>
+          <span class="avatar" aria-hidden="true"
+            >{{ session.user()?.name?.charAt(0) }}{{ session.user()?.lastname?.charAt(0) }}</span
+          >
+          <span class="user-info"
+            ><strong>{{ session.user()?.name }} {{ session.user()?.lastname }}</strong
+            ><small>{{ session.roles().join(' · ') || 'Mi cuenta' }}</small></span
+          ><span aria-hidden="true">⌄</span>
+        </button>
+        <ng-template #userMenu>
+          <div class="user-menu" cdkMenu>
+            <div class="menu-heading">{{ session.user()?.email }}</div>
+            <a cdkMenuItem routerLink="/perfil">Mi perfil</a
+            ><button cdkMenuItem (cdkMenuItemTriggered)="logout()">Cerrar sesión</button>
+          </div>
+        </ng-template>
+      </div>
+    </header>
+    <main #main id="main-content" tabindex="-1"><router-outlet /></main>
+    <footer>
+      <span>© {{ year }} <strong>ManagerTruck</strong>. Gestión de transporte.</span
+      ><span
+        >Versión 0.1.0 <span aria-hidden="true">·</span> Hecho para mantenerte en movimiento</span
+      >
+    </footer>
+  </div>
+</div>

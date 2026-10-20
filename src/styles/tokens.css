@@ -1,0 +1,13 @@
+:root {
+  color-scheme: light;
+  --canvas: #f5f7fb;
+  --surface: #ffffff;
+  --ink: #18243b;
+  --muted: #617086;
+  --line: #e1e7f0;
+  --primary: #245bc7;
+  --primary-dark: #19469e;
+  --nav: #13243e;
+  --radius: 14px;
+  --shadow: 0 8px 28px #172b4d06;
+}

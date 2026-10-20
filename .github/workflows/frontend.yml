@@ -1,0 +1,32 @@
+name: Frontend MVP
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+          cache: npm
+      - run: npm install --global npm@12.1.0
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run build
+      - run: npm run test:ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: dist/ManagerTruck/browser

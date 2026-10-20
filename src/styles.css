@@ -1,1 +1,282 @@
-/* You can add global styles to this file, and also import other style files */
+@import './styles/tokens.css';
+@import '@angular/cdk/overlay-prebuilt.css';
+
+.wizard-steps {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  counter-reset: step;
+}
+.wizard-steps li {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  color: var(--muted);
+}
+.wizard-steps [aria-current='step'] {
+  background: #eaf1ff;
+  color: var(--primary);
+  border-color: #9bb7ef;
+  font-weight: 700;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: Inter, 'Segoe UI', sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.55;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+:focus-visible {
+  outline: 3px solid #517ee9;
+  outline-offset: 3px;
+}
+h2 {
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+}
+h3 {
+  font-size: 1rem;
+}
+.muted {
+  color: var(--muted);
+}
+.eyebrow {
+  color: var(--primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  margin: 0;
+}
+.button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.button:hover {
+  background: #f1f5fb;
+  text-decoration: none;
+}
+.button.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+.button.primary:hover {
+  background: var(--primary-dark);
+}
+.button.danger {
+  color: #ae2637;
+}
+.icon-button {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 9px;
+  color: var(--ink);
+  font-size: 1.2rem;
+}
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+}
+.stack {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.stack > *,
+.panel {
+  min-width: 0;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.field {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+input,
+select,
+textarea {
+  min-height: 44px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b9c5d6;
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  padding: 0.65rem 0.8rem;
+}
+input:disabled {
+  background: #f1f4f8;
+}
+textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.field small,
+.help {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.error {
+  padding: 0.9rem 1rem;
+  border: 1px solid #eebdc4;
+  background: #fff0f2;
+  border-radius: 8px;
+  color: #9c2434;
+}
+.success {
+  padding: 0.9rem 1rem;
+  background: #e8f5ee;
+  border-radius: 8px;
+  color: #166443;
+}
+.empty {
+  padding: 3.5rem 1rem;
+  text-align: center;
+}
+.empty .symbol {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--primary);
+}
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  white-space: nowrap;
+}
+th {
+  padding: 0.9rem 1rem;
+  background: #f7f9fc;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+td {
+  padding: 1rem;
+  border-top: 1px solid var(--line);
+}
+tbody tr:hover {
+  background: #fafcff;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding-top: 1rem;
+  flex-wrap: wrap;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.8rem;
+  background: white;
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+@media (max-width: 600px) {
+  .panel {
+    padding: 1rem;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .button {
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}

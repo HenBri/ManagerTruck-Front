@@ -1,0 +1,299 @@
+<app-page-heading
+  title="Camiones"
+  eyebrow="OPERACIONES / FLOTA"
+  description="Administra los camiones de tus socios y consulta su disponibilidad."
+>
+  @if (session.canWrite() && session.companyId()) {
+    <button class="button primary" (click)="create()" [disabled]="busy() || editing()">
+      ＋ Registrar camión
+    </button>
+  }
+</app-page-heading>
+@if (!session.companyId()) {
+  <div class="panel empty">
+    <h2>Selecciona una empresa</h2>
+    <p class="muted">Necesitas una membresía activa para consultar la flota.</p>
+  </div>
+} @else if (!session.canReadTrucks()) {
+  <div class="error" role="alert">No tienes permisos para consultar camiones en esta empresa.</div>
+} @else {
+  <div class="stack">
+    @if (error() && !editing() && !statusOpen()) {
+      <div class="error" role="alert">{{ error() }}</div>
+    }
+    @if (success()) {
+      <div class="success" role="status">{{ success() }}</div>
+    }
+    @if (editing()) {
+      <app-form-modal
+        [title]="selected() ? 'Editar camión' : 'Registrar camión'"
+        [busy]="busy()"
+        (closeRequested)="cancel()"
+      >
+        @if (error()) {
+          <div class="error" role="alert">{{ error() }}</div>
+        }
+        <div class="section-top">
+          <div>
+            <p class="eyebrow">DATOS DEL VEHÍCULO</p>
+          </div>
+          <button class="button" (click)="cancel()" [disabled]="busy()">Cancelar</button>
+        </div>
+        <form class="stack" [formGroup]="form" (ngSubmit)="save()">
+          <div class="form-grid">
+            @if (!selected()) {
+              <div class="field">
+                <label for="owner">Socio propietario *</label
+                ><select id="owner" formControlName="ownerPartnerId">
+                  <option [ngValue]="null">Selecciona un socio activo</option>
+                  @if (partners.hasValue()) {
+                    @for (partner of partners.value().partners; track partner.partnerId) {
+                      <option
+                        [ngValue]="partner.partnerId"
+                        [disabled]="partner.partnerState !== 'ACTIVE'"
+                      >
+                        {{ partner.partnerName }} · #{{ partner.partnerId }}
+                      </option>
+                    }
+                  }
+                </select>
+                @if (partners.isLoading()) {
+                  <small role="status">Cargando socios…</small>
+                }
+                @if (partners.error()) {
+                  <span class="error"
+                    >{{ errorText(partners.error()) }}
+                    <button type="button" class="button" (click)="partners.reload()">
+                      Reintentar
+                    </button></span
+                  >
+                }
+                @if (partners.hasValue() && partners.value().totalPages > 1) {
+                  <div class="actions">
+                    <button
+                      type="button"
+                      class="button"
+                      [disabled]="partnerPage() === 0"
+                      (click)="partnerPage.set(partnerPage() - 1)"
+                    >
+                      Socios anteriores</button
+                    ><button
+                      type="button"
+                      class="button"
+                      [disabled]="partnerPage() + 1 >= partners.value().totalPages"
+                      (click)="partnerPage.set(partnerPage() + 1)"
+                    >
+                      Más socios
+                    </button>
+                  </div>
+                }
+                <small>La empresa administra la flota; cada camión pertenece a un socio.</small>
+              </div>
+            }
+            @for (field of textFields; track field.key) {
+              <label class="field"
+                >{{ field.label }}{{ field.key === 'truckBoard' ? ' *' : ''
+                }}<input
+                  [formControlName]="field.key"
+                  [maxlength]="field.max"
+                  [attr.aria-invalid]="form.get(field.key)?.touched && form.get(field.key)?.invalid"
+                />
+                @if (form.get(field.key)?.touched && form.get(field.key)?.invalid) {
+                  <small>Revisa este campo (máximo {{ field.max }} caracteres).</small>
+                }
+              </label>
+            }
+            <label class="field"
+              >Año<input type="number" formControlName="truckYear" min="0" max="65535" step="1"
+            /></label>
+            <label class="field"
+              >Capacidad<input
+                type="number"
+                formControlName="truckCapacity"
+                min="0"
+                max="999999999.999"
+                step="0.001"
+              /><small>Valor no negativo, hasta 3 decimales. Unidad según operación.</small></label
+            >
+          </div>
+          @if (form.touched && form.invalid) {
+            <p class="error" role="alert">
+              Completa los campos obligatorios y verifica los valores numéricos.
+            </p>
+          }
+          <div class="actions">
+            <button class="button primary" type="submit" [disabled]="busy()">
+              {{ busy() ? 'Guardando…' : 'Guardar camión' }}</button
+            ><span class="help">* Campos obligatorios</span>
+          </div>
+        </form>
+      </app-form-modal>
+    }
+    @if (selected(); as truck) {
+      <section class="panel">
+        <div class="section-top">
+          <div>
+            <p class="eyebrow">FICHA DEL CAMIÓN #{{ truck.truckId }}</p>
+            <h2>{{ truck.truckBoard }} <app-status-badge [value]="truck.truckState" /></h2>
+          </div>
+          <button class="button" (click)="selected.set(null)">Cerrar detalle</button>
+        </div>
+        <dl class="detail-grid">
+          <div>
+            <dt>Socio propietario</dt>
+            <dd>#{{ truck.ownerPartnerId }}</dd>
+          </div>
+          <div>
+            <dt>Marca / modelo</dt>
+            <dd>{{ truck.truckBrand || '—' }} / {{ truck.truckModel || '—' }}</dd>
+          </div>
+          <div>
+            <dt>Chasis</dt>
+            <dd>{{ truck.truckChassis || '—' }}</dd>
+          </div>
+          <div>
+            <dt>Color</dt>
+            <dd>{{ truck.truckColor || '—' }}</dd>
+          </div>
+          <div>
+            <dt>Año</dt>
+            <dd>{{ truck.truckYear ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt>Capacidad</dt>
+            <dd>{{ truck.truckCapacity ?? '—' }}</dd>
+          </div>
+        </dl>
+        @if (session.canWrite()) {
+          <div class="actions">
+            <button class="button primary" (click)="edit()" [disabled]="busy()">Editar datos</button
+            ><button class="button" (click)="openStatus()" [disabled]="busy()">
+              Cambiar estado
+            </button>
+            @if (statusOpen()) {
+              <app-form-modal
+                title="Cambiar estado"
+                [busy]="busy()"
+                (closeRequested)="closeStatus()"
+              >
+                @if (error()) {
+                  <div class="error" role="alert">{{ error() }}</div>
+                }
+                <label
+                  >Cambiar estado
+                  <select
+                    #status
+                    [value]="truck.truckState"
+                    [disabled]="busy()"
+                    (change)="statusDirty.set(true)"
+                  >
+                    <option value="ACTIVE">Activo</option>
+                    <option value="MAINTENANCE">Mantenimiento</option>
+                    <option value="INACTIVE">Inactivo</option>
+                  </select></label
+                ><button class="button" (click)="changeStatus(status.value)" [disabled]="busy()">
+                  Aplicar estado
+                </button>
+              </app-form-modal>
+            }
+          </div>
+        }
+      </section>
+    }
+    <section class="panel" aria-label="Listado de camiones" [attr.aria-busy]="trucks.isLoading()">
+      <div class="section-top">
+        <div>
+          <h2>Flota de la empresa</h2>
+          <p class="muted">
+            {{
+              trucks.hasValue()
+                ? trucks.value().totalElements + ' camiones registrados'
+                : 'Listado paginado'
+            }}
+          </p>
+        </div>
+        <button class="button" (click)="trucks.reload()" [disabled]="trucks.isLoading()">
+          ↻ Actualizar
+        </button>
+      </div>
+      @if (trucks.isLoading()) {
+        <p role="status" class="empty muted">Cargando camiones…</p>
+      } @else if (trucks.error()) {
+        <div class="error" role="alert">
+          {{ errorText(trucks.error()) }}
+          <button class="button" (click)="trucks.reload()">Reintentar</button>
+        </div>
+      } @else if (!items().length) {
+        <div class="empty">
+          <span class="symbol" aria-hidden="true">▰</span>
+          <h2>Aún no hay camiones en esta página</h2>
+          <p class="muted">Los vehículos registrados aparecerán aquí.</p>
+        </div>
+      } @else {
+        <div
+          class="table-wrap"
+          tabindex="0"
+          role="region"
+          aria-label="Camiones, desplaza horizontalmente para ver todas las columnas"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Placa</th>
+                <th scope="col">Marca / modelo</th>
+                <th scope="col">Socio</th>
+                <th scope="col">Año</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (truck of items(); track truck.truckId) {
+                <tr>
+                  <td>
+                    <strong>{{ truck.truckBoard }}</strong
+                    ><small class="record-id">#{{ truck.truckId }}</small>
+                  </td>
+                  <td>{{ truck.truckBrand || '—' }} {{ truck.truckModel }}</td>
+                  <td>#{{ truck.ownerPartnerId }}</td>
+                  <td>{{ truck.truckYear ?? '—' }}</td>
+                  <td><app-status-badge [value]="truck.truckState" /></td>
+                  <td>
+                    <button
+                      class="button"
+                      (click)="detail(truck)"
+                      [disabled]="busy() || editing()"
+                      [attr.aria-label]="'Ver detalle del camión ' + truck.truckBoard"
+                    >
+                      Ver detalle <span aria-hidden="true">→</span>
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (trucks.hasValue()) {
+        <div class="pagination">
+          <span class="muted">Página {{ page() + 1 }} de {{ trucks.value().totalPages || 1 }}</span>
+          <div class="actions">
+            <button
+              class="button"
+              (click)="page.set(page() - 1)"
+              [disabled]="page() === 0 || trucks.isLoading()"
+            >
+              Anterior</button
+            ><button
+              class="button"
+              (click)="page.set(page() + 1)"
+              [disabled]="page() + 1 >= trucks.value().totalPages || trucks.isLoading()"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  </div>
+}

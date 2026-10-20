@@ -1,0 +1,213 @@
+.login-layout {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.brand-panel {
+  background: var(--nav);
+  color: white;
+  padding: 2.5rem 3.5rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.brand {
+  color: white;
+  text-decoration: none;
+  font-size: 1.5rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+.brand > span {
+  font-weight: 350;
+  font-size: 1.3rem;
+}
+.brand strong {
+  font-weight: 700;
+}
+.brand-content {
+  margin: auto 0;
+  padding: 3rem 0;
+  max-width: 460px;
+  z-index: 1;
+}
+.brand-content .eyebrow {
+  color: #8cb8ff;
+}
+.brand-content h2 {
+  font-size: clamp(2.4rem, 4vw, 4rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.05em;
+  margin: 1.5rem 0;
+}
+.brand-content h2 > span {
+  color: #8cb8ff;
+}
+.brand-content > p:not(.eyebrow) {
+  max-width: 350px;
+  color: #bdcde3;
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+.brand-foot {
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  color: #a6bad6;
+}
+.brand-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.7rem;
+  color: #c1cfe2;
+  font-size: 0.7rem;
+}
+.route-art {
+  height: 110px;
+  position: relative;
+  margin: 1.5rem 0;
+  max-width: 340px;
+}
+.route-line {
+  position: absolute;
+  left: 15px;
+  right: 15px;
+  top: 25px;
+  height: 60px;
+  border: 2px dashed #557ca6;
+  border-radius: 15px;
+  transform: skewY(-5deg);
+}
+.point {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 3px solid #93baff;
+  border-radius: 50%;
+  background: var(--nav);
+  z-index: 1;
+}
+.start {
+  top: 32px;
+  left: 10px;
+}
+.end {
+  right: 10px;
+  bottom: 35px;
+}
+.truck-art {
+  position: absolute;
+  left: 43%;
+  top: 10px;
+  font-size: 3rem;
+  background: var(--nav);
+  padding: 0 8px;
+  color: #c9dfff;
+}
+.login-panel {
+  padding: 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: white;
+}
+.login-card {
+  width: 100%;
+  max-width: 390px;
+  margin: auto;
+}
+.login-card h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  margin: 0.9rem 0;
+}
+.intro {
+  margin-bottom: 2.2rem;
+}
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 85px;
+}
+.password-field button {
+  position: absolute;
+  right: 4px;
+  top: 3px;
+  min-height: 38px;
+  border: 0;
+  background: white;
+  color: var(--primary);
+  font-size: 0.75rem;
+  padding: 0 0.6rem;
+}
+.submit {
+  width: 100%;
+  margin-top: 0.6rem;
+  justify-content: space-between;
+}
+.login-note {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  padding-top: 1.6rem;
+  margin-top: 2rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.75rem;
+}
+.login-note > span {
+  color: var(--primary);
+  font-size: 1.5rem;
+}
+.login-note p {
+  margin: 0;
+}
+footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  width: 100%;
+  font-size: 0.63rem;
+  color: var(--muted);
+  padding-top: 3rem;
+}
+@media (max-width: 900px) {
+  .brand-panel {
+    padding: 2rem;
+  }
+  .login-panel {
+    padding: 2rem;
+  }
+  .brand-content h2 {
+    font-size: 2.7rem;
+  }
+  .brand-features {
+    gap: 1rem;
+  }
+}
+@media (max-width: 700px) {
+  .login-layout {
+    grid-template-columns: 1fr;
+  }
+  .brand-panel {
+    padding: 1.25rem 1.5rem;
+  }
+  .brand-content,
+  .brand-foot {
+    display: none;
+  }
+  .login-panel {
+    padding: 2rem 1.5rem;
+    min-height: calc(100dvh - 77px);
+  }
+  .login-card h1 {
+    font-size: 1.8rem;
+  }
+  footer span {
+    display: none;
+  }
+}
