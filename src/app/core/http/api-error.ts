@@ -11,7 +11,7 @@ export function apiError(error: unknown): string {
     return 'No tienes permiso para realizar esta operación en esta empresa.';
   if (error.status === 404) return 'El registro solicitado no está disponible en esta empresa.';
   if (error.status >= 500)
-    return 'El servidor no pudo completar la operación. Inténtalo más tarde.';
+    return 'El servidor no pudo completar la operación. Inténtalo más tarde';
   return typeof error.error?.message === 'string'
     ? error.error.message
     : 'Revisa los datos e inténtalo nuevamente.';
