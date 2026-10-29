@@ -1,14 +1,14 @@
 import { journeyTargets } from './journey-policy';
 
 describe('Journey transition policy', () => {
-  it('limits drivers to starting and completing partner journeys', () => {
-    expect(journeyTargets('PLANNED', false, 'PARTNER')).toEqual(['IN_PROGRESS']);
-    expect(journeyTargets('IN_PROGRESS', false, 'PARTNER')).toEqual(['COMPLETED']);
-    expect(journeyTargets('PLANNED', false, 'AUXILIARY')).toEqual([]);
+  it('limits assigned drivers to starting and completing their journeys', () => {
+    expect(journeyTargets('PENDIENTE', false, true)).toEqual(['EN_PROCESO']);
+    expect(journeyTargets('EN_PROCESO', false, true)).toEqual(['COMPLETADO']);
+    expect(journeyTargets('PENDIENTE', false, false)).toEqual([]);
   });
   it('does not reopen terminal journeys and allows administrative cancellation', () => {
-    expect(journeyTargets('COMPLETED', true, 'PARTNER')).toEqual([]);
-    expect(journeyTargets('CANCELLED', true, 'AUXILIARY')).toEqual([]);
-    expect(journeyTargets('IN_PROGRESS', true, 'PARTNER')).toEqual(['COMPLETED', 'CANCELLED']);
+    expect(journeyTargets('COMPLETADO', true, false)).toEqual([]);
+    expect(journeyTargets('CANCELADO', true, false)).toEqual([]);
+    expect(journeyTargets('EN_PROCESO', true, false)).toEqual(['COMPLETADO', 'CANCELADO']);
   });
 });

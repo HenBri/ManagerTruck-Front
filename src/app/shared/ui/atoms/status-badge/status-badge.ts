@@ -5,8 +5,12 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<span
     class="badge"
-    [class.positive]="value() === 'ACTIVE' || value() === true"
-    [class.warning]="value() === 'MAINTENANCE'"
+    [class.positive]="
+      value() === 'ACTIVE' || value() === 'ACTIVO' || value() === 'COMPLETADO' || value() === true
+    "
+    [class.warning]="
+      value() === 'MAINTENANCE' || value() === 'MANTENIMIENTO' || value() === 'EN_PROCESO'
+    "
     >{{ label() }}</span
   >`,
   styles: `
@@ -45,6 +49,14 @@ export class StatusBadge {
     () =>
       ({
         ACTIVE: 'Activo',
+        ACTIVO: 'Activo',
+        INACTIVO: 'Inactivo',
+        MANTENIMIENTO: 'Mantenimiento',
+        PENDIENTE: 'Pendiente',
+        EN_PROCESO: 'En proceso',
+        COMPLETADO: 'Completado',
+        CANCELADO: 'Cancelado',
+        ENTREGADO: 'Entregado',
         INACTIVE: 'Inactivo',
         MAINTENANCE: 'Mantenimiento',
         PLANNED: 'Planificado',

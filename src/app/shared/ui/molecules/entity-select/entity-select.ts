@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
 } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -22,6 +23,7 @@ import { apiError } from '../../../../core/http/api-error';
       <select
         [id]="fieldId()"
         [formControl]="control()"
+        (change)="selectionChanged()"
         [attr.aria-describedby]="fieldId() + '-help'"
         [attr.aria-invalid]="control().touched && control().invalid"
       >
@@ -38,7 +40,7 @@ import { apiError } from '../../../../core/http/api-error';
       <small [id]="fieldId() + '-help'">{{
         result.isLoading()
           ? 'Cargando opciones…'
-          : 'Registros de la empresa activa. Los no disponibles están deshabilitados.'
+          : 'Registros disponibles. Los no elegibles están deshabilitados.'
       }}</small>
       @if (control().touched && control().invalid) {
         <small class="validation">Selecciona un registro válido.</small>
@@ -91,11 +93,12 @@ export class EntitySelect {
   readonly control = input.required<FormControl>();
   readonly label = input.required<string>();
   readonly fieldId = input.required<string>();
+  readonly selectionChange = output<LookupRow | null>();
   private readonly session = inject(Session);
   readonly page = signal(0);
   readonly result = inject(LookupApi).resource(() =>
-    this.session.companyId()
-      ? `/api/companies/${this.session.companyId()}/${this.config().endpoint}?page=${this.page()}&size=20`
+    this.session.canRead(this.config().endpoint)
+       ? `/api/${this.config().endpoint}?page=${this.page()}&size=20${this.config().query ?? ''}`
       : undefined,
   );
   readonly rows = computed(() =>
@@ -104,7 +107,7 @@ export class EntitySelect {
   readonly errorText = apiError;
   constructor() {
     effect(() => {
-      this.session.companyId();
+      this.session.user();
       this.config();
       this.page.set(0);
     });
@@ -116,6 +119,10 @@ export class EntitySelect {
     const config = this.config();
     return (
       (!config.state || row[config.state] === (config.requiredState ?? 'ACTIVE')) &&
+      !config.excludedStates?.includes(String(row['state'])) &&
+      (!config.validUntil ||
+        !row[config.validUntil] ||
+        new Date(String(row[config.validUntil])).getTime() >= Date.now()) &&
       (!config.kind || row[config.kind.key] === config.kind.value)
     );
   }
@@ -124,5 +131,14 @@ export class EntitySelect {
       .labels.map((key) => row[key])
       .filter((value) => value !== null && value !== undefined && value !== '')
       .join(' · ')} · #${row[this.config().id]}`;
+  }
+  selectionChanged() {
+    const id = this.control().value;
+    const row = this.rows().find(
+      (candidate) =>
+        candidate[this.config().id] === id ||
+        String(candidate[this.config().id]) === String(id),
+    );
+    this.selectionChange.emit(row ?? null);
   }
 }

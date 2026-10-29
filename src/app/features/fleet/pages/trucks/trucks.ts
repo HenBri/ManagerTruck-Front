@@ -31,7 +31,7 @@ export class Trucks {
   private readonly api = inject(FleetApi);
   private readonly destroyRef = inject(DestroyRef);
   readonly page = signal(0);
-  readonly trucks = this.api.list(this.session.companyId, this.page, this.session.canReadTrucks);
+  readonly trucks = this.api.list(this.page, this.session.canReadTrucks);
   readonly items = computed(() => (this.trucks.hasValue() ? this.trucks.value().trucks : []));
   readonly selected = signal<Truck | null>(null);
   readonly editing = signal(false);
@@ -57,11 +57,11 @@ export class Trucks {
   readonly success = signal('');
   readonly partnerPage = signal(0);
   readonly partners = httpResource<{
-    partners: { partnerId: number; partnerName: string; partnerState: string }[];
+    partners: { partnerId: number; firstName: string; lastName: string; state: 'ACTIVE' | 'INACTIVE' }[];
     totalPages: number;
   }>(() =>
-    this.editing() && !this.selected() && this.session.companyId()
-      ? `/api/companies/${this.session.companyId()}/partners?page=${this.partnerPage()}&size=20`
+    this.editing() && !this.selected() && this.session.canWrite()
+      ? `/api/partners?page=${this.partnerPage()}&size=20`
       : undefined,
   );
   readonly errorText = apiError;
@@ -72,6 +72,22 @@ export class Trucks {
     truckModel: ['', Validators.maxLength(50)],
     truckChassis: ['', Validators.maxLength(50)],
     truckColor: ['', Validators.maxLength(30)],
+    truckType: ['', Validators.maxLength(50)],
+    chassisPlate: ['', Validators.maxLength(20)],
+    insuranceExpiration: [''],
+    technicalInspectionExpiration: [''],
+    truckEmptyWeightKg: [
+      null as number | null,
+      [Validators.min(0), Validators.max(999999999.999), Validators.pattern(/^\d+(\.\d{1,3})?$/)],
+    ],
+    trailerEmptyWeightKg: [
+      null as number | null,
+      [Validators.min(0), Validators.max(999999999.999), Validators.pattern(/^\d+(\.\d{1,3})?$/)],
+    ],
+    maxGrossWeightKg: [
+      null as number | null,
+      [Validators.min(0), Validators.max(999999999.999), Validators.pattern(/^\d+(\.\d{1,3})?$/)],
+    ],
     truckYear: [
       null as number | null,
       [Validators.min(0), Validators.max(65535), Validators.pattern(/^\d+$/)],
@@ -87,7 +103,20 @@ export class Trucks {
     { key: 'truckModel', label: 'Modelo', max: 50 },
     { key: 'truckChassis', label: 'Chasis', max: 50 },
     { key: 'truckColor', label: 'Color', max: 30 },
+    { key: 'truckType', label: 'Tipo de camión', max: 50 },
+    { key: 'chassisPlate', label: 'Placa de remolque', max: 20 },
   ];
+  readonly extraFields = [
+    { key: 'truckEmptyWeightKg', label: 'Peso vacío del camión (kg)', type: 'number' },
+    { key: 'trailerEmptyWeightKg', label: 'Peso vacío del remolque (kg)', type: 'number' },
+    { key: 'maxGrossWeightKg', label: 'Peso bruto máximo (kg)', type: 'number' },
+    { key: 'insuranceExpiration', label: 'Vencimiento del seguro', type: 'date' },
+    {
+      key: 'technicalInspectionExpiration',
+      label: 'Vencimiento de inspección técnica',
+      type: 'date',
+    },
+  ] as const;
   constructor() {
     this.destroyRef.onDestroy(
       inject(PendingChanges).register(
@@ -95,7 +124,7 @@ export class Trucks {
       ),
     );
     effect(() => {
-      this.session.companyId();
+      this.session.user();
       this.page.set(0);
       this.selected.set(null);
       this.editing.set(false);
@@ -116,22 +145,22 @@ export class Trucks {
   }
   detail(truck: Truck) {
     if (this.busy()) return;
-    const company = this.session.companyId()!;
+    const user = this.session.user();
     this.busy.set(true);
     this.error.set('');
     this.editing.set(false);
     this.api
-      .detail(company, truck.truckId)
+      .detail(truck.truckId)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.busy.set(false)),
       )
       .subscribe({
         next: (detail) => {
-          if (this.session.companyId() === company) this.selected.set(detail);
+          if (this.session.user() === user) this.selected.set(detail);
         },
         error: (error) => {
-          if (this.session.companyId() === company) this.error.set(apiError(error));
+          if (this.session.user() === user) this.error.set(apiError(error));
         },
       });
   }
@@ -152,9 +181,16 @@ export class Trucks {
     if (this.busy() || !this.session.canWrite()) return;
     this.form.markAllAsTouched();
     if (this.form.invalid) return;
-    const company = this.session.companyId()!;
+    const user = this.session.user();
     const value = this.form.getRawValue();
     const body: TruckWrite = {
+      truckEmptyWeightKg: value.truckEmptyWeightKg,
+      trailerEmptyWeightKg: value.trailerEmptyWeightKg,
+      maxGrossWeightKg: value.maxGrossWeightKg,
+      truckType: value.truckType?.trim() || null,
+      chassisPlate: value.chassisPlate?.trim() || null,
+      insuranceExpiration: value.insuranceExpiration || null,
+      technicalInspectionExpiration: value.technicalInspectionExpiration || null,
       truckBoard: value.truckBoard!.trim(),
       truckBrand: value.truckBrand?.trim() || null,
       truckModel: value.truckModel?.trim() || null,
@@ -167,8 +203,8 @@ export class Trucks {
     this.busy.set(true);
     this.error.set('');
     const operation = current
-      ? this.api.update(company, current.truckId, body)
-      : this.api.create(company, { ...body, ownerPartnerId: value.ownerPartnerId! });
+      ? this.api.update(current.truckId, body)
+      : this.api.create({ ...body, ownerPartnerId: value.ownerPartnerId! });
     operation
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -176,7 +212,7 @@ export class Trucks {
       )
       .subscribe({
         next: (truck) => {
-          if (this.session.companyId() !== company) return;
+          if (this.session.user() !== user) return;
           this.selected.set(truck);
           this.editing.set(false);
           this.form.markAsPristine();
@@ -184,26 +220,33 @@ export class Trucks {
           this.trucks.reload();
         },
         error: (error) => {
-          if (this.session.companyId() === company) this.error.set(apiError(error));
+          if (this.session.user() === user) this.error.set(apiError(error));
         },
       });
   }
   changeStatus(state: string) {
     const truck = this.selected();
-    if (!truck || this.busy() || !this.session.canWrite() || state === truck.truckState) return;
+    if (
+      !truck ||
+      this.busy() ||
+      !this.session.canWrite() ||
+      state === truck.state ||
+      !['ACTIVE', 'MAINTENANCE', 'INACTIVE'].includes(state)
+    )
+      return;
     if (!window.confirm(`¿Confirmas cambiar el estado de ${truck.truckBoard}?`)) return;
-    const company = this.session.companyId()!;
+    const user = this.session.user();
     this.busy.set(true);
     this.error.set('');
     this.api
-      .status(company, truck.truckId, state as Truck['truckState'])
+      .status(truck.truckId, state as Truck['state'])
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.busy.set(false)),
       )
       .subscribe({
         next: (updated) => {
-          if (this.session.companyId() !== company) return;
+          if (this.session.user() !== user) return;
           this.selected.set(updated);
           this.statusOpen.set(false);
           this.statusDirty.set(false);
@@ -211,7 +254,7 @@ export class Trucks {
           this.trucks.reload();
         },
         error: (error) => {
-          if (this.session.companyId() === company) this.error.set(apiError(error));
+          if (this.session.user() === user) this.error.set(apiError(error));
         },
       });
   }

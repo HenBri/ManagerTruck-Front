@@ -15,7 +15,7 @@ import { FormModal } from '../../../../shared/ui/molecules/form-modal/form-modal
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: ` <app-page-heading
       title="Mi perfil"
-      description="Tu cuenta es personal. Tus permisos se administran en cada empresa."
+      description="Actualiza tus datos personales y tu contraseña de acceso."
       eyebrow="MI CUENTA / PERFIL"
     />
     <div class="stack">
@@ -28,7 +28,10 @@ import { FormModal } from '../../../../shared/ui/molecules/form-modal/form-modal
       <section class="panel">
         <h2>Información personal</h2>
         <p class="muted">{{ session.user()?.email }}</p>
-        <p>{{ session.user()?.name }} {{ session.user()?.lastname }}</p>
+        <p>
+          {{ session.user()?.firstName }} {{ session.user()?.lastName }}
+          {{ session.user()?.maternalLastName }}
+        </p>
         <button class="button primary" (click)="openEditor('profile')">Editar perfil</button>
         @if (editor() === 'profile') {
           <app-form-modal title="Editar perfil" [busy]="busy()" (closeRequested)="closeEditor()">
@@ -103,19 +106,10 @@ import { FormModal } from '../../../../shared/ui/molecules/form-modal/form-modal
         }
       </section>
       <section class="panel">
-        <h2>Mis empresas activas</h2>
-        @for (membership of session.memberships(); track membership.companyId) {
-          <p>
-            Empresa #{{ membership.companyId }}
-            <span class="muted"
-              >· {{ membership.roleNames.join(', ') || 'Sin roles asignados' }}</span
-            >
-          </p>
-        } @empty {
-          <p class="muted">
-            No tienes membresías activas. Solicita acceso al administrador de tu empresa.
-          </p>
-        }
+        <h2>Acceso operativo</h2>
+        <p>
+          {{ session.roles().join(' · ') || 'Sin acceso operativo. Contacta al administrador.' }}
+        </p>
       </section>
     </div>`,
   styles: `
@@ -137,9 +131,10 @@ export class Profile {
   openEditor(editor: 'profile' | 'password') {
     const user = this.session.user();
     this.form.reset({
-      name: user?.name ?? '',
-      lastname: user?.lastname ?? '',
-      ci: user?.ci ?? '',
+      firstName: user?.firstName ?? '',
+      lastName: user?.lastName ?? '',
+      maternalLastName: user?.maternalLastName ?? '',
+      documentNumber: user?.documentNumber ?? '',
       phone: user?.phone ?? '',
     });
     this.password.reset();
@@ -160,21 +155,28 @@ export class Profile {
     this.error.set('');
   }
   readonly fields = [
-    { key: 'name', label: 'Nombres *', max: 100, autocomplete: 'given-name' },
-    { key: 'lastname', label: 'Apellidos *', max: 150, autocomplete: 'family-name' },
-    { key: 'ci', label: 'Documento', max: 30, autocomplete: 'off' },
+    { key: 'firstName', label: 'Nombres *', max: 100, autocomplete: 'given-name' },
+    { key: 'lastName', label: 'Apellido paterno *', max: 100, autocomplete: 'family-name' },
+    {
+      key: 'maternalLastName',
+      label: 'Apellido materno',
+      max: 100,
+      autocomplete: 'additional-name',
+    },
+    { key: 'documentNumber', label: 'Documento', max: 30, autocomplete: 'off' },
     { key: 'phone', label: 'Teléfono', max: 25, autocomplete: 'tel' },
   ];
   readonly form = this.fb.nonNullable.group({
-    name: [
-      this.session.user()?.name ?? '',
+    firstName: [
+      this.session.user()?.firstName ?? '',
       [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)],
     ],
-    lastname: [
-      this.session.user()?.lastname ?? '',
-      [Validators.required, Validators.maxLength(150), Validators.pattern(/\S/)],
+    lastName: [
+      this.session.user()?.lastName ?? '',
+      [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)],
     ],
-    ci: [this.session.user()?.ci ?? '', Validators.maxLength(30)],
+    maternalLastName: [this.session.user()?.maternalLastName ?? '', Validators.maxLength(100)],
+    documentNumber: [this.session.user()?.documentNumber ?? '', Validators.maxLength(30)],
     phone: [this.session.user()?.phone ?? '', Validators.maxLength(25)],
   });
   readonly password = this.fb.nonNullable.group({

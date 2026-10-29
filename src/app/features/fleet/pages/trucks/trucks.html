@@ -3,19 +3,14 @@
   eyebrow="OPERACIONES / FLOTA"
   description="Administra los camiones de tus socios y consulta su disponibilidad."
 >
-  @if (session.canWrite() && session.companyId()) {
+  @if (session.canWrite()) {
     <button class="button primary" (click)="create()" [disabled]="busy() || editing()">
       ＋ Registrar camión
     </button>
   }
 </app-page-heading>
-@if (!session.companyId()) {
-  <div class="panel empty">
-    <h2>Selecciona una empresa</h2>
-    <p class="muted">Necesitas una membresía activa para consultar la flota.</p>
-  </div>
-} @else if (!session.canReadTrucks()) {
-  <div class="error" role="alert">No tienes permisos para consultar camiones en esta empresa.</div>
+@if (!session.canReadTrucks()) {
+  <div class="error" role="alert">No tienes permisos para consultar camiones.</div>
 } @else {
   <div class="stack">
     @if (error() && !editing() && !statusOpen()) {
@@ -48,11 +43,8 @@
                   <option [ngValue]="null">Selecciona un socio activo</option>
                   @if (partners.hasValue()) {
                     @for (partner of partners.value().partners; track partner.partnerId) {
-                      <option
-                        [ngValue]="partner.partnerId"
-                        [disabled]="partner.partnerState !== 'ACTIVE'"
-                      >
-                        {{ partner.partnerName }} · #{{ partner.partnerId }}
+                      <option [ngValue]="partner.partnerId" [disabled]="partner.state !== 'ACTIVE'">
+                        {{ partner.firstName }} {{ partner.lastName }} · #{{ partner.partnerId }}
                       </option>
                     }
                   }
@@ -87,7 +79,7 @@
                     </button>
                   </div>
                 }
-                <small>La empresa administra la flota; cada camión pertenece a un socio.</small>
+                <small>Cada camión pertenece a un socio en estado ACTIVO.</small>
               </div>
             }
             @for (field of textFields; track field.key) {
@@ -115,6 +107,22 @@
                 step="0.001"
               /><small>Valor no negativo, hasta 3 decimales. Unidad según operación.</small></label
             >
+            @for (field of extraFields; track field.key) {
+              <label class="field"
+                >{{ field.label }}
+                @if (field.type === 'number') {
+                  <input
+                    type="number"
+                    [formControlName]="field.key"
+                    min="0"
+                    max="999999999.999"
+                    step="0.001"
+                  />
+                } @else {
+                  <input type="date" [formControlName]="field.key" />
+                }
+              </label>
+            }
           </div>
           @if (form.touched && form.invalid) {
             <p class="error" role="alert">
@@ -134,7 +142,7 @@
         <div class="section-top">
           <div>
             <p class="eyebrow">FICHA DEL CAMIÓN #{{ truck.truckId }}</p>
-            <h2>{{ truck.truckBoard }} <app-status-badge [value]="truck.truckState" /></h2>
+            <h2>{{ truck.truckBoard }} <app-status-badge [value]="truck.state" /></h2>
           </div>
           <button class="button" (click)="selected.set(null)">Cerrar detalle</button>
         </div>
@@ -163,6 +171,20 @@
             <dt>Capacidad</dt>
             <dd>{{ truck.truckCapacity ?? '—' }}</dd>
           </div>
+          @for (field of extraFields; track field.key) {
+            <div>
+              <dt>{{ field.label }}</dt>
+              <dd>{{ truck[field.key] ?? '—' }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Tipo</dt>
+            <dd>{{ truck.truckType ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt>Placa de remolque</dt>
+            <dd>{{ truck.chassisPlate ?? '—' }}</dd>
+          </div>
         </dl>
         @if (session.canWrite()) {
           <div class="actions">
@@ -183,7 +205,7 @@
                   >Cambiar estado
                   <select
                     #status
-                    [value]="truck.truckState"
+                    [value]="truck.state"
                     [disabled]="busy()"
                     (change)="statusDirty.set(true)"
                   >
@@ -203,7 +225,7 @@
     <section class="panel" aria-label="Listado de camiones" [attr.aria-busy]="trucks.isLoading()">
       <div class="section-top">
         <div>
-          <h2>Flota de la empresa</h2>
+          <h2>Flota disponible</h2>
           <p class="muted">
             {{
               trucks.hasValue()
@@ -257,7 +279,7 @@
                   <td>{{ truck.truckBrand || '—' }} {{ truck.truckModel }}</td>
                   <td>#{{ truck.ownerPartnerId }}</td>
                   <td>{{ truck.truckYear ?? '—' }}</td>
-                  <td><app-status-badge [value]="truck.truckState" /></td>
+                  <td><app-status-badge [value]="truck.state" /></td>
                   <td>
                     <button
                       class="button"

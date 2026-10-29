@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth/auth';
+import { authGuard, permissionGuard } from './core/auth/auth';
+import { catalogs } from './features/catalog/data-access/catalog-config';
 import { pendingChangesGuard } from './core/auth/pending-changes';
 
 export const routes: Routes = [
@@ -7,6 +8,11 @@ export const routes: Routes = [
     path: 'login',
     title: 'Acceso · ManagerTruck',
     loadComponent: () => import('./features/auth/pages/login/login').then((m) => m.Login),
+  },
+  {
+    path: 'registro',
+    title: 'Crear cuenta · ManagerTruck',
+    loadComponent: () => import('./features/auth/pages/register/register').then((m) => m.Register),
   },
   {
     path: '',
@@ -22,6 +28,8 @@ export const routes: Routes = [
       },
       {
         path: 'camiones',
+        canActivate: [permissionGuard],
+        data: { endpoint: 'trucks' },
         canDeactivate: [pendingChangesGuard],
         title: 'Camiones · ManagerTruck',
         loadComponent: () => import('./features/fleet/pages/trucks/trucks').then((m) => m.Trucks),
@@ -37,15 +45,18 @@ export const routes: Routes = [
         'socios',
         'conductores',
         'asignaciones',
+        'fletes',
         'viajes',
-        'clientes',
-        'contratos',
-        'cargas',
-        'contenedores',
+         'clientes',
+         'contratos',
+         'contenedores',
         'auxiliares',
+        'usuarios',
+        'roles',
       ].map((module) => ({
         path: `gestion/${module}`,
-        data: { module },
+        data: { module, endpoint: catalogs[module].endpoint, admin: catalogs[module].adminOnly },
+        canActivate: [permissionGuard],
         title: `${module.charAt(0).toUpperCase() + module.slice(1)} · ManagerTruck`,
         canDeactivate: [pendingChangesGuard],
         loadComponent: () =>
@@ -53,6 +64,8 @@ export const routes: Routes = [
       })),
       {
         path: 'administracion',
+        canActivate: [permissionGuard],
+        data: { admin: true },
         title: 'Administración · ManagerTruck',
         canDeactivate: [pendingChangesGuard],
         loadComponent: () =>

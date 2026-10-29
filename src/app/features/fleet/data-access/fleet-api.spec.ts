@@ -15,13 +15,13 @@ describe('FleetApi contract', () => {
   });
   afterEach(() => http.verify());
   it('sends the backend status DTO rather than a response property', () => {
-    api.status(4, 7, 'MAINTENANCE').subscribe();
-    const request = http.expectOne('/api/companies/4/trucks/7/status');
+    api.status(7, 'MAINTENANCE').subscribe();
+    const request = http.expectOne('/api/trucks/7/status');
     expect(request.request.method).toBe('PUT');
-    expect(request.request.body).toEqual({ status: 'MAINTENANCE' });
+    expect(request.request.body).toEqual({ state: 'MAINTENANCE' });
     request.flush({});
   });
-  it('keeps tenant in the URL and ownership out of updates', () => {
+  it('uses the global endpoint and keeps ownership out of updates', () => {
     const body: TruckWrite = {
       truckBoard: 'ABC-123',
       truckBrand: null,
@@ -30,9 +30,17 @@ describe('FleetApi contract', () => {
       truckColor: null,
       truckYear: 2024,
       truckCapacity: 12.5,
+      truckEmptyWeightKg: 8450,
+      trailerEmptyWeightKg: 6200,
+      maxGrossWeightKg: 48000,
+      truckType: 'TRACTOCAMION',
+      chassisPlate: 'REM-4455',
+      insuranceExpiration: '2027-12-31',
+      technicalInspectionExpiration: null,
     };
-    api.update(4, 7, body).subscribe();
-    const request = http.expectOne('/api/companies/4/trucks/7');
+    api.update(7, body).subscribe();
+    const request = http.expectOne('/api/trucks/7');
+    expect(request.request.body.insuranceExpiration).toBe('2027-12-31');
     expect(request.request.body.companyId).toBeUndefined();
     expect(request.request.body.ownerPartnerId).toBeUndefined();
     request.flush({});

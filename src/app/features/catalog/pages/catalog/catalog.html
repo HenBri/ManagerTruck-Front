@@ -1,10 +1,10 @@
 @if (config(); as config) {
   <app-page-heading
     [title]="config.title"
-    eyebrow="GESTIÓN / EMPRESA"
+    eyebrow="GESTIÓN / OPERACIONES"
     [description]="config.description"
   >
-    @if (session.canWrite() && allowed()) {
+    @if (canWrite() && !config.noCreate) {
       <button class="button primary" (click)="create()" [disabled]="busy() || editing()">
         ＋ Registrar {{ config.singular }}
       </button>
@@ -13,7 +13,7 @@
   @if (!allowed()) {
     <div class="panel empty">
       <h2>Acceso no disponible</h2>
-      <p class="muted">Selecciona una empresa en la que tengas permisos para este módulo.</p>
+      <p class="muted">Tu cuenta no tiene permisos para este módulo.</p>
     </div>
   } @else {
     <div class="stack">
@@ -33,12 +33,32 @@
             <div class="error" role="alert">{{ error() }}</div>
           }
           <p class="muted">
-            Los campos con * son obligatorios. Las referencias deben pertenecer a la empresa activa.
+            Los campos con * son obligatorios. Selecciona los recursos disponibles para tu cuenta.
           </p>
           <form class="stack" [formGroup]="form()" (ngSubmit)="save()">
+            @if ((module() === 'socios' || module() === 'conductores') && !selected()) {
+              <p class="help">
+                Indica una persona existente o completa sus datos. La contraseña opcional permite al
+                backend crear una cuenta de acceso si aún no existe.
+              </p>
+            }
+            @if (module() === 'fletes') {
+              <div class="field">
+                <label for="freight-transport">Transporte</label>
+                <select
+                  id="freight-transport"
+                  [value]="mode()"
+                  [disabled]="!!selected()"
+                  (change)="modeChange($any($event.target).value)"
+                >
+                  <option value="PARTNER">Camión de socio</option>
+                  <option value="AUXILIARY">Proveedor auxiliar</option>
+                </select>
+              </div>
+            }
             @if (wizard()) {
               <ol class="wizard-steps" aria-label="Pasos del viaje">
-                <li [attr.aria-current]="step() === 0 ? 'step' : null">1. Carga y trayecto</li>
+                <li [attr.aria-current]="step() === 0 ? 'step' : null">1. Flete y trayecto</li>
                 <li [attr.aria-current]="step() === 1 ? 'step' : null">2. Ejecución</li>
                 <li [attr.aria-current]="step() === 2 ? 'step' : null">3. Revisar</li>
               </ol>
@@ -55,19 +75,20 @@
                   }
                 </dl>
                 <p class="help">
-                  El viaje se registrará en la empresa activa. Las fechas de ejecución las establece
-                  el servidor al iniciar y completar el viaje.
+                  Se permite un viaje por flete. Las fechas de ejecución las establece el servidor
+                  al iniciar y completar el viaje.
                 </p>
               </section>
             }
             <div class="form-grid">
               @for (field of displayedFields(); track field.key) {
-                @if (relations[field.key]; as relation) {
+                @if (relations[field.lookup ?? field.key]; as relation) {
                   <app-entity-select
                     [config]="relation"
                     [control]="form().controls[field.key]"
                     [label]="relationLabel(field)"
                     [fieldId]="'relation-' + field.key"
+                    (selectionChange)="relationSelected(field, $event)"
                   />
                 } @else {
                   <div class="field">
@@ -75,16 +96,18 @@
                       >{{ field.label }}{{ field.required ? ' *' : '' }}</label
                     >
                     @if (field.options) {
-                      <select
-                        [id]="'field-' + field.key"
-                        [formControlName]="field.key"
-                        (change)="field.key === 'executionType' ? modeChange() : null"
-                      >
+                      <select [id]="'field-' + field.key" [formControlName]="field.key">
                         <option [ngValue]="null">Selecciona una opción</option>
                         @for (option of field.options; track option) {
                           <option [value]="option">{{ label(option) }}</option>
                         }
                       </select>
+                    } @else if (field.type === 'checkbox') {
+                      <input
+                        type="checkbox"
+                        [id]="'field-' + field.key"
+                        [formControlName]="field.key"
+                      />
                     } @else {
                       <input
                         [id]="'field-' + field.key"
@@ -93,6 +116,11 @@
                         [attr.maxlength]="field.max ?? null"
                         [attr.min]="field.min ?? null"
                         [attr.step]="field.step ?? null"
+                        [readonly]="!selected() && field.autoPopulated === true"
+                        [class.field-readonly]="!selected() && field.autoPopulated === true"
+                        [attr.aria-readonly]="
+                          !selected() && field.autoPopulated === true ? 'true' : null
+                        "
                         [attr.aria-invalid]="
                           form().get(field.key)?.touched && form().get(field.key)?.invalid
                         "
@@ -142,29 +170,39 @@
           </div>
           <dl class="form-grid">
             @for (field of config.fields; track field.key) {
-              <div>
-                <dt class="muted">{{ field.label }}</dt>
-                <dd>
-                  @if (relations[field.key]; as relation) {
-                    <app-entity-label [config]="relation" [id]="record[field.key]" />
-                  } @else {
-                    {{ label(record[field.key]) }}
-                  }
-                </dd>
-              </div>
+              @if (field.type !== 'password') {
+                <div>
+                  <dt class="muted">{{ field.label }}</dt>
+                  <dd>
+                    @if (relations[field.key]; as relation) {
+                      <app-entity-label [config]="relation" [id]="record[field.key]" />
+                    } @else {
+                      {{ label(record[field.key]) }}
+                    }
+                  </dd>
+                </div>
+              }
             }
           </dl>
           @if (config.state) {
             <app-status-badge [value]="record[config.state]" />
           }
-          @if (session.canWrite()) {
+          @if (module() === 'fletes') {
+            <a
+              class="button"
+              routerLink="/gestion/viajes"
+              [queryParams]="{ freightId: record['freightId'] }"
+              >Ver viaje asociado</a
+            >
+          }
+          @if (canWrite()) {
             <div class="actions">
-              @if (!config.noEdit) {
+              @if (canEdit()) {
                 <button class="button primary" (click)="edit()" [disabled]="busy()">
                   Editar datos
                 </button>
               }
-              @if (module() === 'asignaciones') {
+              @if (module() === 'asignaciones' && !record['assignedUntil']) {
                 <button class="button" (click)="openAction('end')" [disabled]="busy()">
                   Finalizar asignación
                 </button>
@@ -226,7 +264,7 @@
       }
       <section class="panel stack" [attr.aria-busy]="result.isLoading()">
         <div class="actions">
-          <h2>Registros de la empresa</h2>
+          <h2>Registros disponibles</h2>
           <button class="button" (click)="result.reload()" [disabled]="result.isLoading()">
             ↻ Actualizar
           </button>
@@ -280,7 +318,7 @@
           <div class="empty">
             <span class="symbol" aria-hidden="true">◇</span>
             <h2>No hay registros en esta página</h2>
-            <p class="muted">Los registros de esta empresa aparecerán aquí.</p>
+            <p class="muted">Los registros accesibles para tu cuenta aparecerán aquí.</p>
           </div>
         } @else {
           <div
@@ -336,7 +374,7 @@
             </table>
           </div>
         }
-        @if (result.hasValue()) {
+        @if (result.hasValue() && !config.unpaged) {
           <div class="pagination">
             <span class="muted"
               >{{ result.value().totalElements }} registros · Página {{ page() + 1 }} de

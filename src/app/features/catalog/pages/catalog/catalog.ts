@@ -7,8 +7,15 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import {
+  FormControl,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+  ValidatorFn,
+} from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { httpResource } from '@angular/common/http';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { finalize, map } from 'rxjs';
 import { Session } from '../../../../core/auth/session';
@@ -19,13 +26,23 @@ import { CatalogApi, RecordData } from '../../data-access/catalog-api';
 import { catalogs, Field, labels, relations, filterFields } from '../../data-access/catalog-config';
 import { EntitySelect } from '../../../../shared/ui/molecules/entity-select/entity-select';
 import { EntityLabel } from '../../../../shared/ui/molecules/entity-label/entity-label';
+import { LookupRow } from '../../../../core/company-context/lookup-api';
 import { PendingChanges } from '../../../../core/auth/pending-changes';
 import { journeyStep, journeyTargets } from '../../../journeys/models/journey-policy';
 import { FormModal } from '../../../../shared/ui/molecules/form-modal/form-modal.component';
+import { toApiDateTime, toLocalDateTime } from '../../../../core/http/form-values';
 
 @Component({
   selector: 'app-catalog',
-  imports: [ReactiveFormsModule, PageHeading, StatusBadge, EntitySelect, EntityLabel, FormModal],
+  imports: [
+    ReactiveFormsModule,
+    PageHeading,
+    StatusBadge,
+    EntitySelect,
+    EntityLabel,
+    FormModal,
+    RouterLink,
+  ],
   templateUrl: './catalog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -41,39 +58,60 @@ export class Catalog {
   );
   readonly config = computed(() => catalogs[this.module()]);
   readonly recordKey = (row: RecordData) => row[this.config().id];
-  readonly allowed = computed(
+  readonly allowed = computed(() =>
+    this.config()?.adminOnly
+      ? this.session.isAdmin()
+      : this.session.canRead(this.config()?.endpoint),
+  );
+  readonly canWrite = computed(
     () =>
-      !!this.session.companyId() &&
-      (this.config()?.commercial
-        ? this.session.canWrite()
-        : this.session
-            .roles()
-            .some((r) => ['SUPER_ADMIN', 'SECRETARY', 'PARTNER', 'DRIVER'].includes(r))),
+      this.allowed() &&
+      (this.config()?.adminOnly ? this.session.isAdmin() : this.session.canWrite()),
+  );
+  readonly canEdit = computed(
+    () =>
+      this.canWrite() &&
+      !this.config()?.noEdit &&
+      (!['viajes', 'fletes'].includes(this.module()) || this.selected()?.['state'] === 'PENDIENTE'),
+  );
+  readonly assignment = httpResource<{ driverId: number }>(() =>
+    this.module() === 'viajes' &&
+    this.selected()?.['assignmentId'] &&
+    this.session.driverId() !== null
+      ? `/api/assignments/${this.selected()!['assignmentId']}`
+      : undefined,
+  );
+  readonly assignedDriver = computed(
+    () =>
+      this.assignment.hasValue() && this.assignment.value().driverId === this.session.driverId(),
   );
   readonly canChangeStatus = computed(
     () =>
-      this.session.canWrite() ||
-      (this.module() === 'viajes' && this.session.roles().includes('DRIVER')),
+      (this.canWrite() &&
+        !(
+          this.module() === 'usuarios' &&
+          this.selected()?.['userId'] === this.session.user()?.userId
+        )) ||
+      (this.module() === 'viajes' && this.assignedDriver()),
   );
   readonly availableStatuses = computed(() => {
-    if (this.module() !== 'viajes') return this.config()?.statuses ?? [];
-    return journeyTargets(
-      this.selected()?.['journeyState'],
-      this.session.canWrite(),
-      this.selected()?.['executionType'],
-    );
+    if (!['viajes', 'fletes'].includes(this.module()))
+      return (this.config()?.statuses ?? []).filter(
+        (s) => s !== this.selected()?.[this.config().state!],
+      );
+    return journeyTargets(this.selected()?.['state'], this.canWrite(), this.assignedDriver());
   });
   readonly page = signal(0);
   readonly filters = computed(() => filterFields[this.module()] ?? []);
   readonly filterForm = new FormGroup<Record<string, FormControl>>({});
   readonly query = signal('');
   readonly descending = signal(true);
-  readonly base = computed(
-    () => `/api/companies/${this.session.companyId()}/${this.config()?.endpoint}`,
-  );
+  readonly base = computed(() => `/api/${this.config()?.endpoint}`);
   readonly result = this.api.list(() =>
     this.allowed() && this.config()
-      ? `${this.base()}?page=${this.page()}&size=10&sort=${this.config().id},${this.descending() ? 'desc' : 'asc'}${this.query()}`
+      ? this.config().unpaged
+        ? this.base()
+        : `${this.base()}?page=${this.page()}&size=10&sort=${this.config().id},${this.descending() ? 'desc' : 'asc'}${this.query()}`
       : undefined,
   );
   readonly records = computed(() =>
@@ -106,7 +144,11 @@ export class Catalog {
   readonly form = signal(new FormGroup<Record<string, FormControl>>({}));
   readonly fields = computed(() =>
     (this.config()?.fields ?? []).filter(
-      (f) => (!this.selected() || !f.createOnly) && (!f.only || f.only === this.mode()),
+      (f) =>
+        !f.readOnly &&
+        (!this.selected() || !f.createOnly) &&
+        (!!this.selected() || !f.editOnly) &&
+        (!f.only || f.only === this.mode()),
     ),
   );
   readonly errorText = apiError;
@@ -123,11 +165,48 @@ export class Catalog {
   }
   readonly label = (value: unknown) => labels[String(value)] ?? String(value ?? '—');
   readonly relations = relations;
+  private relatedRows: Record<string, LookupRow | null> = {};
   readonly relationLabel = (field: Field) =>
     field.label
       .replace(/^ID (del |de la |de |del|de)/, '')
-      .replace(/^ID /, '')
-      .replace(/^./, (c) => c.toUpperCase()) + (field.required ? ' *' : '');
+       .replace(/^ID /, '')
+       .replace(/^./, (c) => c.toUpperCase()) + (field.required ? ' *' : '');
+  relationSelected(field: Field, row: LookupRow | null) {
+    this.relatedRows[field.key] = row;
+    if (this.selected() || !row) return;
+    if (this.module() === 'fletes') {
+      this.syncFreightFields();
+      return;
+    }
+    if (this.module() !== 'contenedores' || field.key !== 'chargeId') return;
+    const values: Record<string, unknown> = {};
+    if (row['chargeDescription'] || row['goodsDescription'])
+      values['containerDescription'] = [row['chargeDescription'], row['goodsDescription']]
+        .filter((value) => value !== null && value !== undefined && value !== '')
+        .join(' — ');
+    if (row['chargeType']) values['containerType'] = row['chargeType'];
+    if (row['cargoReference']) values['customsReference'] = row['cargoReference'];
+    this.form().patchValue(values);
+  }
+  private syncFreightFields() {
+    const contract = this.relatedRows['contractId'];
+    const container = this.relatedRows['containerId'];
+    const values: Record<string, unknown> = {};
+    if (contract) {
+      if (contract['contractCode']) values['freightCode'] = String(contract['contractCode']).slice(0, 40);
+      if (contract['contractAmount'] !== null && contract['contractAmount'] !== undefined)
+        values['freightAmount'] = contract['contractAmount'];
+      if (contract['expectedStartDate'])
+        values['scheduledDeparture'] = toLocalDateTime(contract['expectedStartDate']);
+      if (contract['expectedDeliveryDate'])
+        values['scheduledArrival'] = toLocalDateTime(contract['expectedDeliveryDate']);
+    }
+    const descriptions = [contract?.['contractDescription'], container?.['containerDescription']]
+      .filter((value) => value !== null && value !== undefined && value !== '')
+      .map(String);
+    if (descriptions.length) values['freightDescription'] = descriptions.join(' — ');
+    this.form().patchValue(values);
+  }
   constructor() {
     this.destroyRef.onDestroy(
       inject(PendingChanges).register(
@@ -157,15 +236,9 @@ export class Catalog {
       }
       this.query.set(query.size ? '&' + query.toString() : '');
     });
-    let previousCompany = this.session.companyId();
     effect(() => {
       this.module();
-      const company = this.session.companyId();
-      if (company !== previousCompany) {
-        previousCompany = company;
-        this.filterForm.reset();
-        this.applyFilters();
-      }
+      this.session.user();
       this.editing.set(false);
       this.action.set(null);
       this.actionDirty.set(false);
@@ -196,42 +269,58 @@ export class Catalog {
   private setup(fields: Field[], data: RecordData = {}) {
     const controls: Record<string, FormControl> = {};
     for (const field of fields) {
-      const validators = [];
+      const validators: ValidatorFn[] = [];
       if (field.required) {
         validators.push(Validators.required);
         if (!field.type || field.type === 'text') validators.push(Validators.pattern(/\S/));
       }
       if (field.max) validators.push(Validators.maxLength(field.max));
+      if (field.minLength) validators.push(Validators.minLength(field.minLength));
+      if (field.options)
+        validators.push((control) =>
+          control.value && !field.options!.includes(control.value) ? { option: true } : null,
+        );
       if (field.min !== undefined) validators.push(Validators.min(field.min));
       if (field.type === 'email') validators.push(Validators.email);
+      if (field.type === 'date' || field.type === 'datetime-local')
+        validators.push((control) =>
+          !control.value || Number.isFinite(new Date(control.value).getTime())
+            ? null
+            : { date: true },
+        );
       if (field.type === 'number') {
         validators.push(
           Validators.pattern(
             field.step === '0.001'
-              ? /^\d+(\.\d{1,3})?$/
+              ? /^-?\d+(\.\d{1,3})?$/
               : field.step === '0.01'
-                ? /^\d+(\.\d{1,2})?$/
+                ? /^-?\d+(\.\d{1,2})?$/
                 : /^\d+$/,
           ),
         );
         validators.push(
           Validators.max(
-            field.step === '0.001'
-              ? 999999999.999
-              : field.step === '0.01'
-                ? 9999999999999.99
-                : Number.MAX_SAFE_INTEGER,
+            field.maximum ??
+              (field.step === '0.001'
+                ? 999999999.999
+                : field.step === '0.01'
+                  ? 9999999999999.99
+                  : Number.MAX_SAFE_INTEGER),
           ),
         );
       }
       controls[field.key] = new FormControl(
-        data[field.key] ?? (field.key === 'executionType' ? this.mode() : null),
+        field.type === 'datetime-local'
+          ? toLocalDateTime(data[field.key])
+          : (data[field.key] ?? (field.type === 'checkbox' ? false : null)),
         validators,
       );
     }
     this.form.set(new FormGroup(controls));
   }
   create() {
+    if (!this.canWrite() || this.config()?.noCreate) return;
+    this.relatedRows = {};
     this.step.set(0);
     this.selected.set(null);
     this.mode.set('PARTNER');
@@ -241,13 +330,16 @@ export class Catalog {
     this.message.set('');
   }
   edit() {
+    if (!this.canEdit()) return;
+    this.mode.set(this.selected()?.['auxiliaryProviderId'] ? 'AUXILIARY' : 'PARTNER');
     this.setup(this.fields(), this.selected()!);
     this.editing.set(true);
     this.error.set('');
   }
-  modeChange() {
+  modeChange(mode: string) {
+    if (this.selected()) return;
     const data = this.form().getRawValue();
-    this.mode.set(String(data['executionType']));
+    this.mode.set(mode);
     this.setup(this.fields(), data);
     this.form().markAsDirty();
   }
@@ -280,7 +372,7 @@ export class Catalog {
       });
   }
   save() {
-    if (this.busy() || !this.session.canWrite()) return;
+    if (this.busy() || !this.canWrite() || (this.selected() && !this.canEdit())) return;
     if (this.wizard() && this.step() < 2) {
       this.nextStep();
       return;
@@ -290,7 +382,61 @@ export class Catalog {
     const body: RecordData = {};
     for (const field of this.fields()) {
       const value = this.form().get(field.key)?.value;
-      body[field.key] = typeof value === 'string' ? value.trim() || null : (value ?? null);
+      body[field.key] =
+        field.type === 'password'
+          ? value || null
+          : typeof value === 'string'
+            ? value.trim() || null
+            : (value ?? null);
+      if (field.type === 'datetime-local' && value) body[field.key] = toApiDateTime(value);
+      if (field.type === 'number' && value !== null && value !== '')
+        body[field.key] = Number(value);
+    }
+    if (
+      ['socios', 'conductores'].includes(this.module()) &&
+      !this.selected() &&
+      !body['personId'] &&
+      (!body['firstName'] || !body['lastName'] || !body['email'])
+    ) {
+      this.error.set(
+        'Para crear una persona completa nombres, apellido y correo; o indica un ID de persona existente.',
+      );
+      return;
+    }
+    if (this.module() === 'fletes') {
+      body[this.mode() === 'PARTNER' ? 'auxiliaryProviderId' : 'truckId'] = null;
+      if (this.mode() === 'PARTNER') body['auxiliaryTruckPlate'] = null;
+    }
+    if (this.module() === 'contratos' && !this.selected()) {
+      (body as Record<string, unknown>)['charges'] = [
+        {
+          cargoReference: body['cargoReference'],
+          chargeType: body['chargeType'],
+          chargeDescription: body['chargeDescription'],
+          goodsDescription: body['goodsDescription'],
+          hazardousGoods: body['hazardousGoods'],
+          handlingInstructions: body['handlingInstructions'],
+        },
+      ];
+      for (const key of [
+        'cargoReference',
+        'chargeType',
+        'chargeDescription',
+        'goodsDescription',
+        'hazardousGoods',
+        'handlingInstructions',
+      ]) delete body[key];
+    }
+    for (const [start, end] of [
+      ['scheduledDeparture', 'scheduledArrival'],
+      ['plannedStartDate', 'plannedEndDate'],
+      ['expectedStartDate', 'expectedDeliveryDate'],
+      ['actualDeparture', 'actualArrival'],
+    ]) {
+      if (body[start] && body[end] && new Date(String(body[end])) < new Date(String(body[start]))) {
+        this.error.set('La fecha final no puede ser anterior a la inicial.');
+        return;
+      }
     }
     if (
       this.module() === 'asignaciones' &&
@@ -304,7 +450,7 @@ export class Catalog {
     this.perform(
       selected
         ? this.api.update(`${this.base()}/${selected[this.config().id]}`, body)
-        : this.api.create(this.base(), body),
+        : this.api.create(this.config().createEndpoint ?? this.base(), body),
     );
   }
   changeStatus(value: string) {
@@ -316,26 +462,26 @@ export class Catalog {
     )
       return;
     if (!window.confirm(`¿Confirmas el cambio de estado a ${this.label(value)}?`)) return;
-    const body: RecordData =
-      this.config().state === 'clientState' ? { clientState: value === 'true' } : { status: value };
+    const body: RecordData = { [this.config().statusKey ?? 'state']: value };
     this.perform(
       this.api.update(`${this.base()}/${this.selected()![this.config().id]}/status`, body),
     );
   }
   endAssignment(until: string) {
-    if (this.busy() || !this.session.canWrite() || !this.selected()) return;
+    if (this.busy() || !this.canWrite() || !this.selected() || this.selected()!['assignedUntil'])
+      return;
     if (!until) {
       this.error.set('Introduce una fecha de finalización.');
       return;
     }
-    if (until <= String(this.selected()!['assignedFrom'])) {
+    if (new Date(until) <= new Date(String(this.selected()!['assignedFrom']))) {
       this.error.set('El fin debe ser posterior al inicio.');
       return;
     }
     if (window.confirm('¿Confirmas finalizar esta asignación?'))
       this.perform(
         this.api.update(`${this.base()}/${this.selected()![this.config().id]}/end`, {
-          assignedUntil: until,
+          assignedUntil: toApiDateTime(until),
         }),
       );
   }

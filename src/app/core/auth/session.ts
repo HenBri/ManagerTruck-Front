@@ -1,22 +1,20 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, forkJoin, of, tap, throwError } from 'rxjs';
+import { catchError, forkJoin, map, of, switchMap, tap, throwError } from 'rxjs';
 import { PendingChanges } from './pending-changes';
 
 export interface User {
   userId: number;
+  personId: number;
   email: string;
-  name: string;
-  lastname: string;
-  ci: string | null;
+  firstName: string;
+  lastName: string;
+  maternalLastName: string | null;
+  documentNumber: string | null;
   phone: string | null;
-  status: string;
-}
-export interface Membership {
-  companyId: number;
-  membershipStatus: string;
-  roleNames: string[];
+  status: 'ACTIVE' | 'INACTIVE';
+  dateCreate?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -26,62 +24,74 @@ export class Session {
   private readonly pending = inject(PendingChanges);
   private authorization = '';
   readonly user = signal<User | null>(null);
-  readonly memberships = signal<Membership[]>([]);
-  readonly superAdmin = signal(false);
-  private readonly extraCompanies = signal<{ companyId: number; name: string }[]>([]);
-  readonly companies = computed(() => {
-    const result = this.memberships().map((m) => ({
-      companyId: m.companyId,
-      name: `Empresa #${m.companyId}`,
-    }));
-    for (const company of this.extraCompanies()) {
-      const index = result.findIndex((item) => item.companyId === company.companyId);
-      if (index < 0) result.push(company);
-      else result[index] = company;
-    }
-    return result;
+  // The local API does not expose user authorities. These are verified read
+  // capabilities, never roles inferred from the public /roles catalogue.
+  readonly readable = signal<string[]>([]);
+  readonly isAdmin = computed(() => this.readable().includes('users'));
+  readonly canWrite = computed(() => this.readable().includes('clients'));
+  readonly canReadTrucks = computed(() => this.canRead('trucks'));
+  readonly driverId = signal<number | null>(null);
+  // Compatibility boundary for the existing, disconnected multi-company
+  // assistant/platform prototypes. Truckv3 exposes no company API.
+  readonly companyId = signal<number | null>(null).asReadonly();
+  readonly superAdmin = signal(false).asReadonly();
+  readonly companies = signal<{ companyId: number; name: string }[]>([]).asReadonly();
+  openAdminCompany(_company: { companyId: number; name: string }): void {
+    throw new Error('La API Truckv3 no admite espacios por empresa.');
+  }
+  readonly roles = computed(() => {
+    if (this.isAdmin()) return ['ADMIN'];
+    if (this.canWrite()) return ['SECRETARY'];
+    return [
+      ...(this.canReadTrucks() ? ['PARTNER'] : []),
+      ...(this.driverId() !== null ? ['DRIVER'] : []),
+    ];
   });
-  readonly companyId = signal<number | null>(null);
-  readonly roles = computed(() =>
-    this.superAdmin()
-      ? ['SUPER_ADMIN']
-      : (this.memberships().find((m) => m.companyId === this.companyId())?.roleNames ?? []),
-  );
-  readonly canWrite = computed(() => this.superAdmin() || this.roles().includes('SECRETARY'));
-  readonly canReadTrucks = computed(() => this.canWrite() || this.roles().includes('PARTNER'));
+
+  canRead(endpoint: string): boolean {
+    if (!this.user()) return false;
+    if (endpoint === 'roles') return true;
+    return this.readable().includes(endpoint);
+  }
 
   login(email: string, password: string) {
     const bytes = new TextEncoder().encode(`${email}:${password}`);
     const authorization = `Basic ${btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''))}`;
     const headers = new HttpHeaders({ Authorization: authorization });
-    return forkJoin({
-      user: this.http.get<User>('/api/users/me', { headers }),
-      membershipData: this.http.get<{ memberships: Membership[] }>('/api/users/me/memberships', {
-        headers,
-      }),
-      platform: this.http
-        .get<{ platformRoles: { userId: number; roleName: string }[] }>(
-          '/api/platform/user-roles',
-          { headers },
-        )
-        .pipe(
-          catchError((error) =>
-            error.status === 403 ? of({ platformRoles: [] }) : throwError(() => error),
-          ),
-        ),
-    }).pipe(
-      tap(({ user, membershipData, platform }) => {
+    // La autenticación ya quedó validada por /users/me. Una falla al consultar
+    // capacidades no debe impedir que el usuario entre a la aplicación.
+    const probe = <T>(endpoint: string) =>
+      this.http
+        .get<T>(`/api/${endpoint}?page=0&size=1`, { headers })
+        .pipe(catchError(() => of(null)));
+    return this.http.get<User>('/api/users/me', { headers }).pipe(
+      tap((user) => {
         this.authorization = authorization;
         this.user.set(user);
-        this.superAdmin.set(
-          platform.platformRoles.some(
-            (role) => role.userId === user.userId && role.roleName === 'SUPER_ADMIN',
-          ),
+      }),
+      switchMap((user) =>
+        forkJoin({
+          users: probe<object>('users'),
+          clients: probe<object>('clients'),
+          trucks: probe<object>('trucks'),
+          journeys: probe<object>('journeys'),
+          drivers: probe<{ drivers: { driverId: number }[] }>('drivers'),
+        }).pipe(map((access) => ({ user, access }))),
+      ),
+      tap(({ user, access }) => {
+        const readable: string[] = [];
+        if (access.users) readable.push('users');
+        if (access.clients)
+          readable.push('clients', 'contracts', 'charges', 'containers', 'auxiliary-providers');
+        if (access.trucks) readable.push('trucks', 'freights');
+        if (access.journeys) readable.push('journeys', 'assignments', 'partners');
+        if (access.drivers) readable.push('drivers');
+        this.readable.set(readable);
+        this.driverId.set(
+          !access.clients && access.drivers?.drivers.some((d) => d.driverId === user.personId)
+            ? user.personId
+            : null,
         );
-        this.memberships.set(
-          membershipData.memberships.filter((m) => m.membershipStatus === 'ACTIVE'),
-        );
-        this.companyId.set(this.memberships()[0]?.companyId ?? null);
       }),
     );
   }
@@ -90,35 +100,12 @@ export class Session {
     return this.authorization;
   }
 
-  selectCompany(id: number) {
-    if (id === this.companyId()) return;
-    if (this.companies().some((m) => m.companyId === id) && this.pending.confirm())
-      this.companyId.set(id);
-  }
-  openAdminCompany(company: { companyId: number; name: string }) {
-    if (!this.superAdmin() || !this.pending.confirm()) return;
-    this.extraCompanies.update((items) => [
-      ...items.filter((item) => item.companyId !== company.companyId),
-      company,
-    ]);
-    this.companyId.set(company.companyId);
-  }
-  nameCompany(company: { companyId: number; name: string }) {
-    if (this.companyId() !== company.companyId) return;
-    this.extraCompanies.update((items) => [
-      ...items.filter((item) => item.companyId !== company.companyId),
-      company,
-    ]);
-  }
-
   logout() {
     this.pending.clear();
     this.authorization = '';
     this.user.set(null);
-    this.superAdmin.set(false);
-    this.memberships.set([]);
-    this.extraCompanies.set([]);
-    this.companyId.set(null);
+    this.readable.set([]);
+    this.driverId.set(null);
     void this.router.navigateByUrl('/login');
   }
 }

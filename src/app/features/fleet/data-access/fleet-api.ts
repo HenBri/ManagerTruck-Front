@@ -1,9 +1,8 @@
 import { HttpClient, httpResource } from '@angular/common/http';
 import { inject, Injectable, Signal } from '@angular/core';
 
-export interface Truck {
+export interface Truck extends TruckWrite {
   truckId: number;
-  companyId: number;
   ownerPartnerId: number;
   truckBoard: string;
   truckBrand: string | null;
@@ -12,10 +11,17 @@ export interface Truck {
   truckColor: string | null;
   truckYear: number | null;
   truckCapacity: number | null;
-  truckState: 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE';
-  truckCreateDate: string;
+  state: 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE';
+  dateCreate: string;
 }
 export interface TruckWrite {
+  truckEmptyWeightKg: number | null;
+  trailerEmptyWeightKg: number | null;
+  maxGrossWeightKg: number | null;
+  truckType: string | null;
+  chassisPlate: string | null;
+  insuranceExpiration: string | null;
+  technicalInspectionExpiration: string | null;
   truckBoard: string;
   truckBrand: string | null;
   truckModel: string | null;
@@ -35,23 +41,21 @@ export interface TruckPage {
 @Injectable({ providedIn: 'root' })
 export class FleetApi {
   private readonly http = inject(HttpClient);
-  list(company: Signal<number | null>, page: Signal<number>, allowed: Signal<boolean>) {
+  list(page: Signal<number>, allowed: Signal<boolean>) {
     return httpResource<TruckPage>(() =>
-      company() && allowed()
-        ? `/api/companies/${company()}/trucks?page=${page()}&size=10&sort=truckId,desc`
-        : undefined,
+      allowed() ? `/api/trucks?page=${page()}&size=10&sort=truckId,desc` : undefined,
     );
   }
-  detail(company: number, id: number) {
-    return this.http.get<Truck>(`/api/companies/${company}/trucks/${id}`);
+  detail(id: number) {
+    return this.http.get<Truck>(`/api/trucks/${id}`);
   }
-  create(company: number, body: TruckWrite & { ownerPartnerId: number }) {
-    return this.http.post<Truck>(`/api/companies/${company}/trucks`, body);
+  create(body: TruckWrite & { ownerPartnerId: number }) {
+    return this.http.post<Truck>(`/api/trucks`, body);
   }
-  update(company: number, id: number, body: TruckWrite) {
-    return this.http.put<Truck>(`/api/companies/${company}/trucks/${id}`, body);
+  update(id: number, body: TruckWrite) {
+    return this.http.put<Truck>(`/api/trucks/${id}`, body);
   }
-  status(company: number, id: number, status: Truck['truckState']) {
-    return this.http.put<Truck>(`/api/companies/${company}/trucks/${id}/status`, { status });
+  status(id: number, state: Truck['state']) {
+    return this.http.put<Truck>(`/api/trucks/${id}/status`, { state });
   }
 }

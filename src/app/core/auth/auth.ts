@@ -7,6 +7,12 @@ import { Session } from './session';
 export const authGuard: CanActivateFn = () =>
   inject(Session).user() ? true : inject(Router).createUrlTree(['/login']);
 
+export const permissionGuard: CanActivateFn = (route) => {
+  const session = inject(Session);
+  const allowed = route.data['admin'] ? session.isAdmin() : session.canRead(route.data['endpoint']);
+  return allowed || inject(Router).createUrlTree(['/inicio']);
+};
+
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const session = inject(Session);
   const isApi = request.url.startsWith('/api/');

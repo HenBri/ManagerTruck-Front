@@ -18,7 +18,6 @@ import { filter, map } from 'rxjs';
 import { Session } from '../../../../core/auth/session';
 import { Navigation } from '../../organisms/navigation/navigation';
 import { PendingChanges } from '../../../../core/auth/pending-changes';
-import { LookupApi } from '../../../../core/company-context/lookup-api';
 
 @Component({
   selector: 'app-shell',
@@ -41,17 +40,12 @@ import { LookupApi } from '../../../../core/company-context/lookup-api';
 })
 export class Shell {
   readonly session = inject(Session);
-  readonly company = inject(LookupApi).companyResource(this.session.companyId);
   private readonly pending = inject(PendingChanges);
   beforeUnload(event: BeforeUnloadEvent) {
     if (this.pending.hasChanges()) {
       event.preventDefault();
       event.returnValue = '';
     }
-  }
-  selectCompany(select: HTMLSelectElement) {
-    this.session.selectCompany(Number(select.value));
-    select.value = String(this.session.companyId());
   }
   logout() {
     if (this.pending.confirm()) this.session.logout();
@@ -70,9 +64,6 @@ export class Shell {
   readonly year = new Date().getFullYear();
 
   constructor() {
-    effect(() => {
-      if (this.company.hasValue()) this.session.nameCompany(this.company.value());
-    });
     effect(() => {
       this.document.body.style.overflow = this.mobile() && this.open() ? 'hidden' : '';
     });

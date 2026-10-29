@@ -38,23 +38,14 @@
         </div>
       </div>
       <div class="header-end">
-        @if (session.companies().length) {
-          <label class="company-picker"
-            ><span class="sr-only">Empresa activa</span
-            ><select [value]="session.companyId()" (change)="selectCompany($any($event.target))">
-              @for (company of session.companies(); track company.companyId) {
-                <option [value]="company.companyId">{{ company.name }}</option>
-              }
-            </select></label
-          >
-        }
         <button type="button" class="user-trigger" [cdkMenuTriggerFor]="userMenu">
           <span class="sr-only">Abrir menú de usuario</span>
           <span class="avatar" aria-hidden="true"
-            >{{ session.user()?.name?.charAt(0) }}{{ session.user()?.lastname?.charAt(0) }}</span
+            >{{ session.user()?.firstName?.charAt(0)
+            }}{{ session.user()?.lastName?.charAt(0) }}</span
           >
           <span class="user-info"
-            ><strong>{{ session.user()?.name }} {{ session.user()?.lastname }}</strong
+            ><strong>{{ session.user()?.firstName }} {{ session.user()?.lastName }}</strong
             ><small>{{ session.roles().join(' · ') || 'Mi cuenta' }}</small></span
           ><span aria-hidden="true">⌄</span>
         </button>

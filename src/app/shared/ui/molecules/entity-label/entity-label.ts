@@ -18,10 +18,10 @@ export class EntityLabel {
   private readonly session = inject(Session);
   readonly result = inject(LookupApi).resource(() =>
     this.id() &&
-    this.session.companyId() &&
+    this.session.canRead(this.config().endpoint) &&
     this.config().endpoint !== 'users' &&
     this.config().supportsDetail !== false
-      ? `/api/companies/${this.session.companyId()}/${this.config().endpoint}/${this.id()}`
+      ? `/api/${this.config().endpoint}/${this.id()}`
       : undefined,
   );
   readonly text = computed(() => {

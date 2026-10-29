@@ -10,8 +10,8 @@ import { PageHeading } from '../../../../shared/ui/molecules/page-heading/page-h
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-page-heading
-      [title]="'Hola, ' + session.user()?.name"
-      description="Tu operación empieza aquí. Accede a la información de tu empresa y continúa donde lo dejaste."
+      [title]="'Hola, ' + session.user()?.firstName"
+      description="Tu operación empieza aquí. Accede a la información disponible para tu cuenta."
       eyebrow="RESUMEN / INICIO"
     />
     <section class="welcome">
@@ -31,18 +31,18 @@ import { PageHeading } from '../../../../shared/ui/molecules/page-heading/page-h
         <strong>MT</strong>
       </div>
     </section>
-    @if (!session.companyId()) {
+    @if (!session.readable().length) {
       <section class="panel empty">
-        <h2>Tu cuenta aún no tiene una empresa activa</h2>
+        <h2>Tu cuenta aún no tiene acceso operativo</h2>
         <p class="muted">
-          Solicita a un administrador una membresía y un rol para comenzar a operar.
+          Solicita al administrador los permisos necesarios para comenzar a operar.
         </p>
         <a class="button" routerLink="/perfil">Ver mi perfil</a>
       </section>
     } @else {
       <div class="section-title">
         <h2>Una mirada a tu operación</h2>
-        <span class="muted">Empresa #{{ session.companyId() }} · Datos de la API</span>
+        <span class="muted">Datos de la API · Truckv3</span>
       </div>
       <section class="metrics" aria-label="Totales de registros accesibles">
         @for (metric of metrics; track metric.label) {
@@ -84,25 +84,31 @@ import { PageHeading } from '../../../../shared/ui/molecules/page-heading/page-h
                 <span>→</span></a
               >
             }
-            <a routerLink="/gestion/viajes"
-              ><span class="quick-icon">↗</span>
-              <div><strong>Consultar viajes</strong><small>Origen, destino y ejecución</small></div>
-              <span>→</span></a
-            ><a routerLink="/gestion/conductores"
-              ><span class="quick-icon">♙</span>
-              <div>
-                <strong>Equipo de conductores</strong><small>Datos de contacto y licencias</small>
-              </div>
-              <span>→</span></a
-            >
+            @if (session.canRead('journeys')) {
+              <a routerLink="/gestion/viajes"
+                ><span class="quick-icon">↗</span>
+                <div>
+                  <strong>Consultar viajes</strong><small>Origen, destino y ejecución</small>
+                </div>
+                <span>→</span></a
+              >
+            }
+            @if (session.canRead('drivers')) {
+              <a routerLink="/gestion/conductores"
+                ><span class="quick-icon">♙</span>
+                <div>
+                  <strong>Equipo de conductores</strong><small>Datos de contacto y licencias</small>
+                </div>
+                <span>→</span></a
+              >
+            }
           </div>
         </section>
         <section class="panel workspace-card">
           <p class="eyebrow">MI ESPACIO</p>
-          <h2>La empresa correcta,<br />los datos correctos.</h2>
+          <h2>Tu cuenta,<br />tu operación.</h2>
           <p class="muted">
-            Puedes cambiar de empresa desde el encabezado. Cada espacio tiene sus propios registros
-            y permisos.
+            Los registros y acciones disponibles dependen de los permisos de tu cuenta.
           </p>
           <div class="role-list">
             @for (role of session.roles(); track role) {
@@ -335,14 +341,19 @@ import { PageHeading } from '../../../../shared/ui/molecules/page-heading/page-h
 export class Dashboard {
   readonly session = inject(Session);
   private readonly api = inject(CatalogApi);
-  private total(endpoint: string, allowed = () => true) {
+  private total(endpoint: string, allowed = () => this.session.canRead(endpoint)) {
     return this.api.list(() =>
-      this.session.companyId() && allowed()
-        ? `/api/companies/${this.session.companyId()}/${endpoint}?page=0&size=1`
-        : undefined,
+      this.session.user() && allowed() ? `/api/${endpoint}?page=0&size=1` : undefined,
     );
   }
   readonly metrics = [
+    {
+      label: 'Fletes',
+      icon: '▰',
+      link: '/gestion/fletes',
+      visible: () => this.session.canRead('freights'),
+      resource: this.total('freights'),
+    },
     {
       label: 'Camiones',
       icon: '▰',
@@ -354,14 +365,14 @@ export class Dashboard {
       label: 'Conductores',
       icon: '♙',
       link: '/gestion/conductores',
-      visible: () => true,
+      visible: () => this.session.canRead('drivers'),
       resource: this.total('drivers'),
     },
     {
       label: 'Viajes',
       icon: '↗',
       link: '/gestion/viajes',
-      visible: () => true,
+      visible: () => this.session.canRead('journeys'),
       resource: this.total('journeys'),
     },
     {

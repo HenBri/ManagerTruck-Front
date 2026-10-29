@@ -166,6 +166,15 @@ textarea {
 input:disabled {
   background: #f1f4f8;
 }
+input.field-readonly {
+  background: #eef2f7;
+  border-color: #98a8bc;
+  color: #536277;
+  cursor: not-allowed;
+}
+input.field-readonly:focus-visible {
+  outline-color: #71809a;
+}
 textarea {
   min-height: 110px;
   resize: vertical;

@@ -1,21 +1,21 @@
 export function journeyTargets(
   state: unknown,
   canAdminister: boolean,
-  executionType: unknown,
+  assigned: unknown,
 ): string[] {
   const targets =
-    state === 'PLANNED'
-      ? ['IN_PROGRESS', 'CANCELLED']
-      : state === 'IN_PROGRESS'
-        ? ['COMPLETED', 'CANCELLED']
+    state === 'PENDIENTE'
+      ? ['EN_PROCESO', 'CANCELADO']
+      : state === 'EN_PROCESO'
+        ? ['COMPLETADO', 'CANCELADO']
         : [];
   if (canAdminister) return targets;
-  return executionType === 'PARTNER' ? targets.filter((target) => target !== 'CANCELLED') : [];
+  return assigned === true ? targets.filter((target) => target !== 'CANCELADO') : [];
 }
 
 export function journeyStep(key: string): number {
   return [
-    'containerId',
+    'freightId',
     'journeyOrigin',
     'journeyDestination',
     'journeyDescription',

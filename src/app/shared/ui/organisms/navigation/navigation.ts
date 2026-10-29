@@ -29,7 +29,7 @@ import { Session } from '../../../../core/auth/session';
         title="Inicio"
         ><span aria-hidden="true">◫</span><span class="label">Inicio</span></a
       >
-      @if (session.companyId()) {
+      @if (session.user()) {
         <p class="section-label">{{ compact() ? '···' : 'OPERACIONES' }}</p>
         @if (session.canReadTrucks()) {
           <a
@@ -42,15 +42,17 @@ import { Session } from '../../../../core/auth/session';
           >
         }
         @for (item of operational; track item.path) {
-          <a
-            [routerLink]="['/gestion', item.path]"
-            routerLinkActive="active"
-            ariaCurrentWhenActive="page"
-            (click)="navigated.emit()"
-            [title]="item.label"
-            ><span aria-hidden="true">{{ item.icon }}</span
-            ><span class="label">{{ item.label }}</span></a
-          >
+          @if (session.canRead(item.endpoint)) {
+            <a
+              [routerLink]="['/gestion', item.path]"
+              routerLinkActive="active"
+              ariaCurrentWhenActive="page"
+              (click)="navigated.emit()"
+              [title]="item.label"
+              ><span aria-hidden="true">{{ item.icon }}</span
+              ><span class="label">{{ item.label }}</span></a
+            >
+          }
         }
         @if (session.canWrite()) {
           <p class="section-label">{{ compact() ? '···' : 'GESTIÓN COMERCIAL' }}</p>
@@ -68,7 +70,7 @@ import { Session } from '../../../../core/auth/session';
         }
       }
       <p class="section-label">{{ compact() ? '···' : 'MI CUENTA' }}</p>
-      @if (session.canWrite()) {
+      @if (session.isAdmin()) {
         <a
           routerLink="/administracion"
           routerLinkActive="active"
@@ -208,15 +210,15 @@ export class Navigation {
   readonly compact = input(false);
   readonly navigated = output();
   readonly operational = [
-    { path: 'socios', label: 'Socios', icon: '◇' },
-    { path: 'conductores', label: 'Conductores', icon: '♙' },
-    { path: 'asignaciones', label: 'Asignaciones', icon: '⇄' },
-    { path: 'viajes', label: 'Viajes', icon: '↗' },
+    { path: 'socios', endpoint: 'partners', label: 'Socios', icon: '◇' },
+    { path: 'conductores', endpoint: 'drivers', label: 'Conductores', icon: '♙' },
+    { path: 'asignaciones', endpoint: 'assignments', label: 'Asignaciones', icon: '⇄' },
+    { path: 'fletes', endpoint: 'freights', label: 'Fletes', icon: '▰' },
+    { path: 'viajes', endpoint: 'journeys', label: 'Viajes', icon: '↗' },
   ];
   readonly commercial = [
     { path: 'clientes', label: 'Clientes', icon: '♧' },
     { path: 'contratos', label: 'Contratos', icon: '▤' },
-    { path: 'cargas', label: 'Cargas', icon: '▣' },
     { path: 'contenedores', label: 'Contenedores', icon: '▥' },
     { path: 'auxiliares', label: 'Auxilio externo', icon: '⊕' },
   ];

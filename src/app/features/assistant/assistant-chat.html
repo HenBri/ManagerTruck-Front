@@ -1,0 +1,136 @@
+@if (open()) {
+  <section
+    id="assistant-panel"
+    class="chat"
+    role="dialog"
+    aria-labelledby="assistant-title"
+    (keydown.escape)="close(); $event.stopPropagation()"
+  >
+    <div class="chat-header">
+      <div>
+        <strong id="assistant-title">Asistente ManagerTruck</strong
+        ><small>Ayuda del sistema · Sin historial</small>
+      </div>
+      <button type="button" (click)="reset()" aria-label="Nueva conversación">↻</button>
+      <button type="button" (click)="close()" aria-label="Cerrar y borrar conversación">×</button>
+    </div>
+    <div class="notice">
+      Empresa activa: {{ session.companyId() }}. Al cerrar se borra esta conversación. Las consultas
+      se procesan con Groq y requieren internet.
+    </div>
+    <div
+      #feed
+      class="messages"
+      role="log"
+      aria-label="Mensajes de la conversación"
+      aria-live="polite"
+      aria-relevant="additions"
+    >
+      @if (!messages().length) {
+        <div class="welcome">
+          <h2>¿En qué te ayudo?</h2>
+          <p>
+            Puedo explicar procedimientos, permisos y errores, y consultar camiones y viajes
+            autorizados.
+          </p>
+        </div>
+        @for (
+          question of [
+            '¿Para qué sirve ManagerTruck?',
+            '¿Cómo registro un viaje?',
+            '¿A qué tengo acceso?',
+          ];
+          track question
+        ) {
+          <button
+            class="suggestion"
+            type="button"
+            (click)="draft = question; send()"
+            [disabled]="busy() || !session.companyId()"
+          >
+            {{ question }}
+          </button>
+        }
+      }
+      @for (message of messages(); track $index) {
+        <article class="message" [class.user]="message.role === 'user'">
+          <strong>{{ message.role === 'user' ? 'Tú' : 'Asistente' }}</strong>
+          <p>{{ message.text }}</p>
+          @if (message.role === 'assistant') {
+            @if (message.sources?.length) {
+              <details>
+                <summary>Fuentes recuperadas</summary>
+                @for (source of message.sources; track $index) {
+                  <div class="source">
+                    <strong>{{ source.title }} · v{{ source.version }}</strong>
+                    <p>{{ source.excerpt }}</p>
+                  </div>
+                }
+              </details>
+            }
+            <small>Consulta: {{ message.consultedAt }}</small>
+          }
+        </article>
+      }
+    </div>
+    <div class="feedback">
+      @if (!session.companyId()) {
+        <p>Selecciona una empresa para consultar al asistente.</p>
+      }
+      @if (error()) {
+        <p role="alert" class="error">{{ error() }}</p>
+        @if (draft.trim()) {
+          <button
+            type="button"
+            (click)="send()"
+            [disabled]="busy() || capabilities()?.enabled === false"
+          >
+            Reintentar pregunta
+          </button>
+        }
+      }
+      <span role="status">{{ status() }}</span>
+      @if (context.error() && context.error()?.companyId === session.companyId()) {
+        <button type="button" (click)="explainError()" [disabled]="busy()">
+          Explicar último error HTTP {{ context.error()?.status }}
+        </button>
+      }
+    </div>
+    <form (ngSubmit)="send()">
+      <label class="sr-only" for="assistant-question">Pregunta al asistente</label>
+      <textarea
+        #questionInput
+        id="assistant-question"
+        name="question"
+        [(ngModel)]="draft"
+        maxlength="2000"
+        rows="2"
+        placeholder="Escribe tu pregunta…"
+        [disabled]="busy() || !session.companyId()"
+      ></textarea>
+      <div class="actions">
+        <button
+          class="send"
+          type="submit"
+          [disabled]="
+            !draft.trim() || busy() || !session.companyId() || capabilities()?.enabled === false
+          "
+        >
+          Enviar
+        </button>
+      </div>
+    </form>
+  </section>
+}
+<button
+  #launcher
+  class="launcher"
+  type="button"
+  (click)="toggle()"
+  [attr.aria-expanded]="open()"
+  [attr.aria-controls]="open() ? 'assistant-panel' : null"
+  [attr.aria-label]="open() ? 'Cerrar y borrar conversación' : 'Abrir asistente de ayuda'"
+>
+  <span aria-hidden="true">{{ open() ? '×' : '?' }}</span
+  ><span class="launcher-label">Asistente</span>
+</button>
